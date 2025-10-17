@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+
+option java_package = "com.wzvideni.pateo.music.protobuf.proto";
+option java_multiple_files = true;
+
+message MainSettings {
+  // 自动搜索
+  bool auto_search = 1;
+  // 歌词字体颜色
+  int64 lyrics_color = 2;
+  // 翻译字体颜色
+  int64 translation_color = 3;
+  // 歌词字体大小
+  float lyrics_size = 4;
+  // 翻译字体大小
+  float translation_size = 5;
+  // 歌词字体粗细
+  int32 lyrics_weight = 6;
+  // 翻译字体粗细
+  int32 translation_weight = 7;
+  // 其他歌词颜色
+  int64 other_lyrics_color = 8;
+  // 其他歌词字体大小
+  float other_lyrics_size = 9;
+  // 其他歌词字体粗细
+  int32 other_lyrics_weight = 10;
+  // 歌词可见行数
+  int32 lyrics_visible_lines = 11;
+  // 歌词行间距
+  float lyrics_line_spacing = 12;
+}
