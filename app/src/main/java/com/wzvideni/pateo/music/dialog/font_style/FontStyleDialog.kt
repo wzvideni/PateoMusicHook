@@ -1,7 +1,10 @@
 package com.wzvideni.pateo.music.dialog.font_style
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -19,7 +22,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wzvideni.pateo.music.MainDataStore
 import com.wzvideni.pateo.music.basic.BasicNumberSlider
@@ -61,14 +63,18 @@ fun FontStyleDialog(
     var tabIndex by remember { mutableIntStateOf(0) }
 
     val tabs by remember { mutableStateOf(listOf("歌词", "翻译", "其他")) }
-
-
-    Dialog(onDismissRequest = onDismissRequest) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable {
+                onDismissRequest()
+            }, contentAlignment = Alignment.Center
+    ) {
 
         OutlinedCard {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxWidth(0.5f)
                     .padding(horizontal = 15.dp, vertical = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(15.dp)

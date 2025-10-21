@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     autowire(libs.plugins.android.application)
     autowire(libs.plugins.kotlin.android)
@@ -32,8 +35,20 @@ android {
         versionCode = property.project.app.versionCode
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    signingConfigs {
+        create("wzvideni") {
+            val keystorePropertiesFile: File = rootProject.file("keystore.properties")
+            val keystoreProperties = Properties()
+            keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+            keyAlias = keystoreProperties["keyAlias"] as String
+            keyPassword = keystoreProperties["keyPassword"] as String
+            storeFile = file(keystoreProperties["storeFile"] as String)
+            storePassword = keystoreProperties["storePassword"] as String
+        }
+    }
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("wzvideni")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -42,7 +57,6 @@ android {
             )
         }
     }
-
     applicationVariants.all {
         outputs.map { it as com.android.build.gradle.internal.api.BaseVariantOutputImpl }
             .forEach { output ->
