@@ -6,8 +6,8 @@ import android.view.WindowManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
@@ -158,16 +158,14 @@ class MainHookEntry : IYukiHookXposedInit {
                                 mainDataStore.setLyricsVisibleLines(3)
                                 mainDataStore.setLyricsLineSpacing(15.dp)
                             }
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                            ) {
+                            Box(modifier = Modifier.fillMaxSize()) {
                                 Row(modifier = Modifier.fillMaxSize()) {
-                                    Spacer(Modifier.weight(1f))
                                     LazyColumn(
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         verticalArrangement = Arrangement.spacedBy(lyricsLineSpacing),
-                                        modifier = Modifier.weight(2f)
+                                        modifier = Modifier
+                                            .align(Alignment.Bottom)
+                                            .padding(start = 70.dp, bottom = 180.dp)
                                     ) {
                                         items(
                                             items = visibleLyrics,
@@ -226,7 +224,6 @@ class MainHookEntry : IYukiHookXposedInit {
                                             }
                                         }
                                     }
-                                    Spacer(Modifier.weight(4f))
                                 }
                             }
                         }
