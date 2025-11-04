@@ -133,16 +133,15 @@ class MainHookEntry : IYukiHookXposedInit {
                                 MainDataStore.defaultOtherLyricsWeight
                             )
 
-                            val visibleLyricsRange by remember {
-                                derivedStateOf {
-                                    musicLyricsIndex - lyricsVisibleLines / 2..musicLyricsIndex + lyricsVisibleLines / 2
-                                }
-                            }
-
+                            // 仅显示当前歌词与下一句歌词
                             val visibleLyrics by remember {
                                 derivedStateOf {
-                                    musicLyricsList.withIndex()
-                                        .filter { it.index in visibleLyricsRange }
+                                    val current = musicLyricsIndex
+                                    val next = current + 1
+                                    val lastIndex = musicLyricsList.lastIndex
+                                    musicLyricsList.withIndex().filter { indexed ->
+                                        indexed.index == current || (next <= lastIndex && indexed.index == next)
+                                    }
                                 }
                             }
 
@@ -156,16 +155,19 @@ class MainHookEntry : IYukiHookXposedInit {
                                 mainDataStore.setTranslationWeight(FontWeight.Bold)
                                 mainDataStore.setOtherLyricsColor(Color(0xFFCC7B00))
                                 mainDataStore.setLyricsVisibleLines(3)
-                                mainDataStore.setLyricsLineSpacing(15.dp)
+                                mainDataStore.setLyricsLineSpacing(8.dp)
                             }
                             Box(modifier = Modifier.fillMaxSize()) {
-                                Row(modifier = Modifier.fillMaxSize()) {
+                                Row(
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
                                     LazyColumn(
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         verticalArrangement = Arrangement.spacedBy(lyricsLineSpacing),
                                         modifier = Modifier
-                                            .align(Alignment.Bottom)
-                                            .padding(start = 70.dp, bottom = 180.dp)
+                                            .align(Alignment.Top)
+                                            .padding(bottom = 100.dp)
                                     ) {
                                         items(
                                             items = visibleLyrics,
