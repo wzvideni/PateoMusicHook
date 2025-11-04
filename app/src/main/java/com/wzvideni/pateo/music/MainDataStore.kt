@@ -44,6 +44,8 @@ object MainSettingsSerializer : Serializer<MainSettings> {
         otherLyricsColor = MainDataStore.defaultOtherLyricsColor.toLongValue()
         otherLyricsSize = MainDataStore.defaultOtherLyricsSize.value
         otherLyricsWeight = MainDataStore.defaultOtherLyricsWeight.weight
+        overlayPositionX = MainDataStore.defaultOverlayPositionX
+        overlayPositionY = MainDataStore.defaultOverlayPositionY
     }
 
     override suspend fun readFrom(input: InputStream): MainSettings {
@@ -70,6 +72,8 @@ class MainDataStore(context: Context) {
         val defaultOtherLyricsColor by lazy { Color.White }
         val defaultOtherLyricsSize by lazy { 14.sp }
         val defaultOtherLyricsWeight by lazy { FontWeight.Normal }
+        val defaultOverlayPositionX by lazy { 0 }
+        val defaultOverlayPositionY by lazy { 0 }
     }
 
     private val dataStore = context.MainSettingsDataStore
@@ -160,5 +164,24 @@ class MainDataStore(context: Context) {
     suspend fun getOtherLyricsWeight(): FontWeight = otherLyricsWeight.first()
     suspend fun setOtherLyricsWeight(weight: FontWeight) = updateSettings {
         otherLyricsWeight = weight.weight
+    }
+
+    // 悬浮窗位置 X
+    val overlayPositionX: Flow<Int> = safeDataStore.map { it.overlayPositionX }
+    suspend fun getOverlayPositionX(): Int = overlayPositionX.first()
+    suspend fun setOverlayPositionX(position: Int) = updateSettings {
+        overlayPositionX = position
+    }
+
+    // 悬浮窗位置 Y
+    val overlayPositionY: Flow<Int> = safeDataStore.map { it.overlayPositionY }
+    suspend fun getOverlayPositionY(): Int = overlayPositionY.first()
+    suspend fun setOverlayPositionY(position: Int) = updateSettings {
+        overlayPositionY = position
+    }
+
+    suspend fun setOverlayPosition(positionX: Int, positionY: Int) = updateSettings {
+        overlayPositionX = positionX
+        overlayPositionY = positionY
     }
 }

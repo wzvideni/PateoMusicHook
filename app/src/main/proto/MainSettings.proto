@@ -29,4 +29,8 @@ message MainSettings {
   int32 lyrics_visible_lines = 11;
   // 歌词行间距
   float lyrics_line_spacing = 12;
+  // 悬浮窗位置 X
+  int32 overlay_position_x = 13;
+  // 悬浮窗位置 Y
+  int32 overlay_position_y = 14;
 }

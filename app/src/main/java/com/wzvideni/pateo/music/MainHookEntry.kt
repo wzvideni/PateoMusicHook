@@ -3,29 +3,7 @@ package com.wzvideni.pateo.music
 import android.app.Application
 import android.content.Context.WINDOW_SERVICE
 import android.view.WindowManager
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Text
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.highcapable.betterandroid.system.extension.tool.AndroidVersion
 import com.highcapable.kavaref.KavaRef.Companion.resolve
 import com.highcapable.yukihookapi.annotation.xposed.InjectYukiHookWithXposed
@@ -36,9 +14,9 @@ import com.highcapable.yukihookapi.hook.log.YLog
 import com.highcapable.yukihookapi.hook.xposed.proxy.IYukiHookXposedInit
 import com.wzvideni.pateo.music.expansion.checkDrawOverlays
 import com.wzvideni.pateo.music.expansion.getValueOf
-import com.wzvideni.pateo.music.expansion.lockedWindowParams
 import com.wzvideni.pateo.music.expansion.toast
-import com.wzvideni.pateo.music.lifecycle.FloatingWindowLifecycleOwner
+import com.wzvideni.pateo.music.overlay.FloatingLyricsOverlay
+import kotlinx.coroutines.runBlocking
 
 @InjectYukiHookWithXposed
 class MainHookEntry : IYukiHookXposedInit {
@@ -46,7 +24,7 @@ class MainHookEntry : IYukiHookXposedInit {
     lateinit var application: Application
     lateinit var mainViewModel: MainViewModel
     lateinit var mainDataStore: MainDataStore
-    lateinit var floatingLyricsView: ComposeView
+    lateinit var floatingLyricsHandle: FloatingLyricsOverlay.Handle
     lateinit var floatingSettingsView: ComposeView
 
 
@@ -66,12 +44,11 @@ class MainHookEntry : IYukiHookXposedInit {
 
     fun addFloatingComposeView(application: Application) {
         if (application.checkDrawOverlays()) {
-            if (floatingLyricsView.parent == null) {
-                windowManager.addView(floatingLyricsView, lockedWindowParams)
+            val handle = floatingLyricsHandle
+            if (handle.view.parent == null) {
+                windowManager.addView(handle.view, handle.layoutParams)
 //                windowManager.addView(floatingSettingsView, unlockedWindowParams)
-                FloatingWindowLifecycleOwner.updateLifecycleState(Lifecycle.State.CREATED)
-                FloatingWindowLifecycleOwner.updateLifecycleState(Lifecycle.State.STARTED)
-                FloatingWindowLifecycleOwner.updateLifecycleState(Lifecycle.State.RESUMED)
+                FloatingLyricsOverlay.updateLifecycleToResumed()
                 application.toast("启动悬浮窗")
             }
         } else {
@@ -92,144 +69,20 @@ class MainHookEntry : IYukiHookXposedInit {
                     windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
                     mainViewModel = MainViewModel(this)
                     mainDataStore = MainDataStore(this)
-                    floatingLyricsView = ComposeView(this).apply {
-                        setViewTreeLifecycleOwner(FloatingWindowLifecycleOwner)
-                        setViewTreeSavedStateRegistryOwner(FloatingWindowLifecycleOwner)
-                        setContent {
-                            val musicLyricsList by mainViewModel.musicLyricsList.collectAsStateWithLifecycle()
-                            val musicLyricsIndex by mainViewModel.musicLyricsIndex.collectAsStateWithLifecycle()
-
-                            val lyricsVisibleLines by mainDataStore.lyricsVisibleLines.collectAsStateWithLifecycle(
-                                MainDataStore.defaultLyricsVisibleLines
-                            )
-                            val lyricsLineSpacing by mainDataStore.lyricsLineSpacing.collectAsStateWithLifecycle(
-                                MainDataStore.defaultLyricsLineSpacing
-                            )
-                            val lyricsColor by mainDataStore.lyricsColor.collectAsStateWithLifecycle(
-                                MainDataStore.defaultLyricsColor
-                            )
-                            val translationColor by mainDataStore.translationColor.collectAsStateWithLifecycle(
-                                MainDataStore.defaultTranslationColor
-                            )
-                            val otherLyricsColor by mainDataStore.otherLyricsColor.collectAsStateWithLifecycle(
-                                MainDataStore.defaultOtherLyricsColor
-                            )
-                            val lyricsSize by mainDataStore.lyricsSize.collectAsStateWithLifecycle(
-                                MainDataStore.defaultLyricsSize
-                            )
-                            val translationSize by mainDataStore.translationSize.collectAsStateWithLifecycle(
-                                MainDataStore.defaultTranslationSize
-                            )
-                            val otherLyricsSize by mainDataStore.otherLyricsSize.collectAsStateWithLifecycle(
-                                MainDataStore.defaultOtherLyricsSize
-                            )
-                            val lyricsWeight by mainDataStore.lyricsWeight.collectAsStateWithLifecycle(
-                                MainDataStore.defaultLyricsWeight
-                            )
-                            val translationWeight by mainDataStore.translationWeight.collectAsStateWithLifecycle(
-                                MainDataStore.defaultTranslationWeight
-                            )
-                            val otherLyricsWeight by mainDataStore.otherLyricsWeight.collectAsStateWithLifecycle(
-                                MainDataStore.defaultOtherLyricsWeight
-                            )
-
-                            // 仅显示当前歌词与下一句歌词
-                            val visibleLyrics by remember {
-                                derivedStateOf {
-                                    val current = musicLyricsIndex
-                                    val next = current + 1
-                                    val lastIndex = musicLyricsList.lastIndex
-                                    musicLyricsList.withIndex().filter { indexed ->
-                                        indexed.index == current || (next <= lastIndex && indexed.index == next)
-                                    }
-                                }
-                            }
-
-                            LaunchedEffect(Unit) {
-                                mainDataStore.setLyricsSize(25f)
-                                mainDataStore.setTranslationSize(25f)
-                                mainDataStore.setOtherLyricsSize(24f)
-                                mainDataStore.setLyricsColor(Color(0xFF01b425))
-                                mainDataStore.setTranslationColor(Color(0xFF01b425))
-                                mainDataStore.setLyricsWeight(FontWeight.Bold)
-                                mainDataStore.setTranslationWeight(FontWeight.Bold)
-                                mainDataStore.setOtherLyricsColor(Color(0xFFCC7B00))
-                                mainDataStore.setLyricsVisibleLines(3)
-                                mainDataStore.setLyricsLineSpacing(8.dp)
-                            }
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                Row(
-                                    modifier = Modifier.fillMaxSize(),
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    LazyColumn(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(lyricsLineSpacing),
-                                        modifier = Modifier
-                                            .align(Alignment.Top)
-                                            .padding(bottom = 100.dp)
-                                    ) {
-                                        items(
-                                            items = visibleLyrics,
-                                            key = { indexedValue ->
-                                                val musicLyrics = indexedValue.value
-                                                val millisecond = musicLyrics.millisecond
-                                                val lyrics = musicLyrics.lyricsList.firstOrNull()
-                                                val translation =
-                                                    musicLyrics.lyricsList.lastOrNull()
-                                                "${millisecond}${lyrics}${translation}"
-                                            }
-                                        ) { indexedValue ->
-                                            val index = indexedValue.index
-                                            val musicLyrics = indexedValue.value
-                                            val lyrics = musicLyrics.lyricsList.getOrNull(0)
-                                            val translation = musicLyrics.lyricsList.getOrNull(1)
-
-                                            if (lyrics != null) {
-                                                if (musicLyricsIndex == index) {
-                                                    Text(
-                                                        text = lyrics,
-                                                        color = lyricsColor,
-                                                        fontSize = lyricsSize,
-                                                        fontWeight = lyricsWeight,
-                                                        textAlign = TextAlign.Center
-                                                    )
-                                                } else {
-                                                    Text(
-                                                        text = lyrics,
-                                                        color = otherLyricsColor,
-                                                        fontSize = otherLyricsSize,
-                                                        fontWeight = otherLyricsWeight,
-                                                        textAlign = TextAlign.Center
-                                                    )
-                                                }
-                                            }
-
-                                            if (translation != null) {
-                                                if (musicLyricsIndex == index) {
-                                                    Text(
-                                                        text = translation,
-                                                        color = translationColor,
-                                                        fontSize = translationSize,
-                                                        fontWeight = translationWeight,
-                                                        textAlign = TextAlign.Center
-                                                    )
-                                                } else {
-                                                    Text(
-                                                        text = translation,
-                                                        color = otherLyricsColor,
-                                                        fontSize = otherLyricsSize,
-                                                        fontWeight = otherLyricsWeight,
-                                                        textAlign = TextAlign.Center
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    val initialPosition = runBlocking {
+                        FloatingLyricsOverlay.OverlayPosition(
+                            mainDataStore.getOverlayPositionX(),
+                            mainDataStore.getOverlayPositionY()
+                        )
                     }
+                    floatingLyricsHandle = FloatingLyricsOverlay.create(
+                        context = this,
+                        windowManager = windowManager,
+                        mainViewModel = mainViewModel,
+                        mainDataStore = mainDataStore,
+                        isMockMode = false,
+                        initialPosition = initialPosition
+                    )
 
 //                    floatingSettingsView = ComposeView(this).apply {
 //                        setViewTreeLifecycleOwner(FloatingWindowLifecycleOwner)
