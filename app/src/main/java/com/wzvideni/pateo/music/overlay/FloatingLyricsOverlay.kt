@@ -249,12 +249,58 @@ private fun FloatingLyricsContent(
     val listState = rememberLazyListState()
     val density = LocalDensity.current
     val centerOffset = remember(lyricsVisibleLines) { (lyricsVisibleLines - 1) / 2 }
-    val perLineApproxPx = remember(lyricsSize, lyricsLineSpacing, density) {
-        // 近似每行高度（sp->px 后 *1.6 + 行距px），用于滚动偏移与容器高度估算
-        with(density) { lyricsSize.toPx() * 1.6f + lyricsLineSpacing.toPx() }
+    val approxLyricLinePx = remember(lyricsSize, otherLyricsSize, density) {
+        with(density) { kotlin.math.max(lyricsSize.toPx(), otherLyricsSize.toPx()) * 1.6f }
     }
-    val maxHeightDp = remember(perLineApproxPx, lyricsVisibleLines, density) {
-        with(density) { (perLineApproxPx * lyricsVisibleLines).toDp() }
+    val approxTranslationLinePx = remember(translationSize, otherLyricsSize, density) {
+        with(density) { kotlin.math.max(translationSize.toPx(), otherLyricsSize.toPx()) * 1.6f }
+    }
+    var measuredLyricCurrentPx by remember { mutableStateOf<Float?>(null) }
+    var measuredLyricOtherPx by remember { mutableStateOf<Float?>(null) }
+    var measuredTranslationCurrentPx by remember { mutableStateOf<Float?>(null) }
+    var measuredTranslationOtherPx by remember { mutableStateOf<Float?>(null) }
+    val containerHeightDp = remember(
+        musicLyricsList,
+        musicLyricsIndex,
+        lyricsVisibleLines,
+        lyricsLineSpacing,
+        approxLyricLinePx,
+        approxTranslationLinePx,
+        measuredLyricCurrentPx,
+        measuredLyricOtherPx,
+        measuredTranslationCurrentPx,
+        measuredTranslationOtherPx,
+        density
+    ) {
+        val startIndex = (musicLyricsIndex - centerOffset).coerceAtLeast(0)
+        var heightPx = 0f
+        var rowsAccum = 0
+        val spacingPx = with(density) { lyricsLineSpacing.toPx() }
+        val lyricCurrentPx = measuredLyricCurrentPx ?: approxLyricLinePx
+        val lyricOtherPx = measuredLyricOtherPx ?: approxLyricLinePx
+        val transCurrentPx = measuredTranslationCurrentPx ?: approxTranslationLinePx
+        val transOtherPx = measuredTranslationOtherPx ?: approxTranslationLinePx
+        var i = startIndex
+        while (i <= musicLyricsList.lastIndex && rowsAccum < lyricsVisibleLines) {
+            val item = musicLyricsList[i]
+            val hasLyric = item.lyricsList.getOrNull(0) != null
+            val hasTrans = item.lyricsList.getOrNull(1) != null
+            val rowHeight =
+                (if (hasLyric) {
+                    if (i == musicLyricsIndex) lyricCurrentPx else lyricOtherPx
+                } else 0f) +
+                (if (hasTrans) {
+                    if (i == musicLyricsIndex) transCurrentPx else transOtherPx
+                } else 0f)
+
+            heightPx += rowHeight
+            if (i == musicLyricsIndex && rowsAccum < lyricsVisibleLines - 1) {
+                heightPx += spacingPx
+            }
+            rowsAccum++
+            i++
+        }
+        with(density) { heightPx.toDp() }
     }
 
     // 移除每次初始化强制覆盖设置，改为完全使用 DataStore 持久化值
@@ -332,17 +378,17 @@ private fun FloatingLyricsContent(
                 val lastStart =
                     (musicLyricsList.lastIndex - lyricsVisibleLines + 1).coerceAtLeast(0)
                 val targetIndex = startIndex.coerceAtMost(lastStart)
-                val scrollOffsetPx = (perLineApproxPx * centerOffset).toInt()
+                val approxRowPx = (approxLyricLinePx + approxTranslationLinePx)
+                val scrollOffsetPx = (approxRowPx * centerOffset).toInt()
                 listState.animateScrollToItem(targetIndex, scrollOffsetPx)
             }
 
             LazyColumn(
                 state = listState,
                 modifier = Modifier
-                    .heightIn(max = maxHeightDp),
+                    .heightIn(max = containerHeightDp),
                 userScrollEnabled = false,
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(lyricsLineSpacing)
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 itemsIndexed(
                     items = musicLyricsList,
@@ -356,7 +402,8 @@ private fun FloatingLyricsContent(
                     val lyrics = musicLyrics.lyricsList.getOrNull(0)
                     val translation = musicLyrics.lyricsList.getOrNull(1)
 
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    val bottomPad = if (musicLyricsIndex == index) lyricsLineSpacing else 0.dp
+                    Column(modifier = Modifier.fillMaxWidth().padding(bottom = bottomPad)) {
                         if (lyrics != null) {
                             if (musicLyricsIndex == index) {
                                 Text(
@@ -365,7 +412,8 @@ private fun FloatingLyricsContent(
                                     fontSize = lyricsSize,
                                     fontWeight = lyricsWeight,
                                     textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onTextLayout = { measuredLyricCurrentPx = it.size.height.toFloat() }
                                 )
                             } else {
                                 Text(
@@ -374,7 +422,8 @@ private fun FloatingLyricsContent(
                                     fontSize = otherLyricsSize,
                                     fontWeight = otherLyricsWeight,
                                     textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onTextLayout = { measuredLyricOtherPx = it.size.height.toFloat() }
                                 )
                             }
                         }
@@ -387,7 +436,8 @@ private fun FloatingLyricsContent(
                                     fontSize = translationSize,
                                     fontWeight = translationWeight,
                                     textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onTextLayout = { measuredTranslationCurrentPx = it.size.height.toFloat() }
                                 )
                             } else {
                                 Text(
@@ -396,7 +446,8 @@ private fun FloatingLyricsContent(
                                     fontSize = otherLyricsSize,
                                     fontWeight = otherLyricsWeight,
                                     textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onTextLayout = { measuredTranslationOtherPx = it.size.height.toFloat() }
                                 )
                             }
                         }
