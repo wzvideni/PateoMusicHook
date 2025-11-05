@@ -95,11 +95,13 @@ class MainHookEntry : IYukiHookXposedInit {
                             val songId = "$songInfo".getValueOf("songId")
                             val songMid = "$songInfo".getValueOf("songMid")
                             val songName = "$songInfo".getValueOf("songName")
+                            val singerName = "$songInfo".getValueOf("singerName")
                             val albumName = "$songInfo".getValueOf("albumName")
                             val albumPic = "$songInfo".getValueOf("albumPic500x500")
                             mainViewModel.setSongId(songId)
                             mainViewModel.setSongMid(songMid)
                             mainViewModel.setSongName(songName)
+                            mainViewModel.setAlbumName(singerName)
                             mainViewModel.setAlbumName(albumName)
                             mainViewModel.setAlbumPic(albumPic)
 

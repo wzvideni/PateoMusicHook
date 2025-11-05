@@ -26,6 +26,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val songName: StateFlow<String?> = _songName
     fun setSongName(songName: String?) = _songName.set(songName)
 
+    private val _singerName: MutableStateFlow<String?> = MutableStateFlow(null)
+    val singerName: StateFlow<String?> = _singerName
+    fun setSingerName(singerName: String?) = _singerName.set(singerName)
+
     // 专辑名
     private val _albumName: MutableStateFlow<String?> = MutableStateFlow(null)
     val albumName: StateFlow<String?> = _albumName

@@ -241,6 +241,7 @@ private fun FloatingLyricsContent(
 
     // 获取歌曲信息
     val songName by mainViewModel.songName.collectAsStateWithLifecycle()
+    val singerName by mainViewModel.singerName.collectAsStateWithLifecycle()
     val albumName by mainViewModel.albumName.collectAsStateWithLifecycle()
     val albumPic by mainViewModel.albumPic.collectAsStateWithLifecycle()
 
@@ -263,6 +264,10 @@ private fun FloatingLyricsContent(
             val mockLyrics = mockLyrics()
             mainViewModel.setMusicLyricsList(mockLyrics)
             mainViewModel.setMusicPlayingPosition(0L)
+            mainViewModel.setSongName("偏爱 (My devotion)")
+            mainViewModel.setSingerName("黄星")
+            mainViewModel.setAlbumName("Beloved (挚爱)")
+            mainViewModel.setAlbumPic("http://y.gtimg.cn/music/photo_new/T002R500x500M000001J55Pj0QwUjw_1.jpg")
             while (isActive) {
                 mockLyrics.forEach { lyric ->
                     mainViewModel.setMusicPlayingPosition(lyric.millisecond.toLong())
