@@ -1,6 +1,3 @@
-import java.io.FileInputStream
-import java.util.Properties
-
 plugins {
     autowire(libs.plugins.android.application)
     autowire(libs.plugins.kotlin.android)
@@ -35,7 +32,7 @@ android {
         versionCode = property.project.app.versionCode
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
- //   signingConfigs {
+    //   signingConfigs {
     //       create("wzvideni") {
 //            val keystorePropertiesFile: File = rootProject.file("keystore.properties")
     //           val keystoreProperties = Properties()
@@ -94,6 +91,8 @@ android {
 }
 
 dependencies {
+    implementation("io.coil-kt.coil3:coil-compose:3.3.0")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
 
     implementation(com.google.code.gson.gson)
 

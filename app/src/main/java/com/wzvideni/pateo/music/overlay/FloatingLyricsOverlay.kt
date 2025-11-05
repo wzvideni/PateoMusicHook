@@ -340,6 +340,7 @@ private fun FloatingLyricsContent(
                 state = listState,
                 modifier = Modifier
                     .heightIn(max = maxHeightDp),
+                userScrollEnabled = false,
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(lyricsLineSpacing)
             ) {
