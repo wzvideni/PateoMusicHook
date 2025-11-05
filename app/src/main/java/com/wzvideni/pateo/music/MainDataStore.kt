@@ -67,7 +67,7 @@ class MainDataStore(context: Context) {
         val defaultTranslationSize by lazy { 15.sp }
         val defaultLyricsWeight by lazy { FontWeight.Normal }
         val defaultTranslationWeight by lazy { FontWeight.Normal }
-        val defaultLyricsVisibleLines by lazy { 3 }
+        val defaultLyricsVisibleLines by lazy { 2 }
         val defaultLyricsLineSpacing by lazy { 15.dp }
         val defaultOtherLyricsColor by lazy { Color.White }
         val defaultOtherLyricsSize by lazy { 14.sp }

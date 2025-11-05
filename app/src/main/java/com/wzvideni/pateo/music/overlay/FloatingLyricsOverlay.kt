@@ -5,29 +5,45 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.view.Gravity
 import android.view.WindowManager
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.consumeAllChanges
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.view.ViewCompat
@@ -38,6 +54,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.wzvideni.pateo.music.MainDataStore
 import com.wzvideni.pateo.music.MainViewModel
 import com.wzvideni.pateo.music.data.mockLyrics
+import com.wzvideni.pateo.music.dialog.font_color.FontColorDialog
 import com.wzvideni.pateo.music.lifecycle.FloatingWindowLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -46,8 +63,7 @@ import kotlinx.coroutines.launch
 object FloatingLyricsOverlay {
 
     data class Handle(
-        val view: ComposeView,
-        val layoutParams: WindowManager.LayoutParams
+        val view: ComposeView, val layoutParams: WindowManager.LayoutParams
     )
 
     data class OverlayPosition(val x: Int, val y: Int)
@@ -91,8 +107,7 @@ object FloatingLyricsOverlay {
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT
             )
         } else {
@@ -100,8 +115,7 @@ object FloatingLyricsOverlay {
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT
             ).apply {
                 alpha = 0.9f
@@ -231,29 +245,19 @@ private fun FloatingLyricsContent(
         MainDataStore.defaultOtherLyricsWeight
     )
 
-    val visibleLyrics by remember {
-        derivedStateOf {
-            val current = musicLyricsIndex
-            val next = current + 1
-            val lastIndex = musicLyricsList.lastIndex
-            musicLyricsList.withIndex().filter { indexed ->
-                indexed.index == current || (next <= lastIndex && indexed.index == next)
-            }
-        }
+    // 使用完整列表 + 平滑滚动，让滚动更自然
+    val listState = rememberLazyListState()
+    val density = LocalDensity.current
+    val centerOffset = remember(lyricsVisibleLines) { (lyricsVisibleLines - 1) / 2 }
+    val perLineApproxPx = remember(lyricsSize, lyricsLineSpacing, density) {
+        // 近似每行高度（sp->px 后 *1.6 + 行距px），用于滚动偏移与容器高度估算
+        with(density) { lyricsSize.toPx() * 1.6f + lyricsLineSpacing.toPx() }
+    }
+    val maxHeightDp = remember(perLineApproxPx, lyricsVisibleLines, density) {
+        with(density) { (perLineApproxPx * lyricsVisibleLines).toDp() }
     }
 
-    LaunchedEffect(Unit) {
-        mainDataStore.setLyricsSize(25f)
-        mainDataStore.setTranslationSize(25f)
-        mainDataStore.setOtherLyricsSize(24f)
-        mainDataStore.setLyricsColor(Color(0xFF01b425))
-        mainDataStore.setTranslationColor(Color(0xFF01b425))
-        mainDataStore.setLyricsWeight(FontWeight.Bold)
-        mainDataStore.setTranslationWeight(FontWeight.Bold)
-        mainDataStore.setOtherLyricsColor(Color(0xFFCC7B00))
-        mainDataStore.setLyricsVisibleLines(3)
-        mainDataStore.setLyricsLineSpacing(8.dp)
-    }
+    // 移除每次初始化强制覆盖设置，改为完全使用 DataStore 持久化值
 
     LaunchedEffect(isMockMode) {
         if (isMockMode) {
@@ -270,94 +274,126 @@ private fun FloatingLyricsContent(
     }
 
     val coroutineScope = rememberCoroutineScope()
+    var controlsVisible by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
             .wrapContentSize(Alignment.Center)
             .pointerInput(Unit) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = {
-                        dragController.onDragStart()
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consumeAllChanges()
-                        dragController.onDrag(dragAmount)
-                    },
-                    onDragEnd = {
-                        val position = dragController.onDragEnd()
-                        coroutineScope.launch {
-                            mainDataStore.setOverlayPosition(position.x, position.y)
-                        }
-                    },
-                    onDragCancel = {
-                        val position = dragController.onDragEnd()
-                        coroutineScope.launch {
-                            mainDataStore.setOverlayPosition(position.x, position.y)
-                        }
+                detectTapGestures(
+                    onTap = {
+                        controlsVisible = !controlsVisible
+                    })
+            }
+            .pointerInput(Unit) {
+                detectDragGesturesAfterLongPress(onDragStart = {
+                    dragController.onDragStart()
+                }, onDrag = { change, dragAmount ->
+                    change.consumeAllChanges()
+                    dragController.onDrag(dragAmount)
+                }, onDragEnd = {
+                    val position = dragController.onDragEnd()
+                    coroutineScope.launch {
+                        mainDataStore.setOverlayPosition(position.x, position.y)
                     }
-                )
+                }, onDragCancel = {
+                    val position = dragController.onDragEnd()
+                    coroutineScope.launch {
+                        mainDataStore.setOverlayPosition(position.x, position.y)
+                    }
+                })
             }
             .onGloballyPositioned { coordinates ->
                 dragController.onSizeChanged(coordinates.size.width, coordinates.size.height)
             }
-            .padding(bottom = 100.dp)
-    ) {
-        LazyColumn(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(lyricsLineSpacing)
+            .padding(bottom = 0.dp)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            items(
-                items = visibleLyrics,
-                key = { indexedValue ->
-                    val musicLyrics = indexedValue.value
-                    val millisecond = musicLyrics.millisecond
-                    val lyrics = musicLyrics.lyricsList.firstOrNull()
-                    val translation = musicLyrics.lyricsList.lastOrNull()
-                    "${millisecond}${lyrics}${translation}"
-                }
-            ) { indexedValue ->
-                val index = indexedValue.index
-                val musicLyrics = indexedValue.value
-                val lyrics = musicLyrics.lyricsList.getOrNull(0)
-                val translation = musicLyrics.lyricsList.getOrNull(1)
+            AnimatedVisibility(
+                visible = controlsVisible,
+                enter = slideInVertically { it / 2 } + fadeIn(),
+                exit = slideOutVertically { it / 2 } + fadeOut()) {
 
-                if (lyrics != null) {
-                    if (musicLyricsIndex == index) {
-                        Text(
-                            text = lyrics,
-                            color = lyricsColor,
-                            fontSize = lyricsSize,
-                            fontWeight = lyricsWeight,
-                            textAlign = TextAlign.Center
-                        )
-                    } else {
-                        Text(
-                            text = lyrics,
-                            color = otherLyricsColor,
-                            fontSize = otherLyricsSize,
-                            fontWeight = otherLyricsWeight,
-                            textAlign = TextAlign.Center
-                        )
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    FontColorDialog(mainDataStore = mainDataStore)
+                }
+
+            }
+
+            // 平滑滚动到当前歌词附近位置（居中偏移）
+            LaunchedEffect(musicLyricsIndex, lyricsVisibleLines) {
+                val startIndex = (musicLyricsIndex - centerOffset).coerceAtLeast(0)
+                val lastStart = (musicLyricsList.lastIndex - lyricsVisibleLines + 1).coerceAtLeast(0)
+                val targetIndex = startIndex.coerceAtMost(lastStart)
+                val scrollOffsetPx = (perLineApproxPx * centerOffset).toInt()
+                listState.animateScrollToItem(targetIndex, scrollOffsetPx)
+            }
+
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .heightIn(max = maxHeightDp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(lyricsLineSpacing)
+            ) {
+                itemsIndexed(
+                    items = musicLyricsList,
+                    key = { _, musicLyrics ->
+                        val millisecond = musicLyrics.millisecond
+                        val lyrics = musicLyrics.lyricsList.firstOrNull()
+                        val translation = musicLyrics.lyricsList.lastOrNull()
+                        "${millisecond}${lyrics}${translation}"
                     }
-                }
+                ) { index, musicLyrics ->
+                    val lyrics = musicLyrics.lyricsList.getOrNull(0)
+                    val translation = musicLyrics.lyricsList.getOrNull(1)
 
-                if (translation != null) {
-                    if (musicLyricsIndex == index) {
-                        Text(
-                            text = translation,
-                            color = translationColor,
-                            fontSize = translationSize,
-                            fontWeight = translationWeight,
-                            textAlign = TextAlign.Center
-                        )
-                    } else {
-                        Text(
-                            text = translation,
-                            color = otherLyricsColor,
-                            fontSize = otherLyricsSize,
-                            fontWeight = otherLyricsWeight,
-                            textAlign = TextAlign.Center
-                        )
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        if (lyrics != null) {
+                            if (musicLyricsIndex == index) {
+                                Text(
+                                    text = lyrics,
+                                    color = lyricsColor,
+                                    fontSize = lyricsSize,
+                                    fontWeight = lyricsWeight,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            } else {
+                                Text(
+                                    text = lyrics,
+                                    color = otherLyricsColor,
+                                    fontSize = otherLyricsSize,
+                                    fontWeight = otherLyricsWeight,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+
+                        if (translation != null) {
+                            if (musicLyricsIndex == index) {
+                                Text(
+                                    text = translation,
+                                    color = translationColor,
+                                    fontSize = translationSize,
+                                    fontWeight = translationWeight,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            } else {
+                                Text(
+                                    text = translation,
+                                    color = otherLyricsColor,
+                                    fontSize = otherLyricsSize,
+                                    fontWeight = otherLyricsWeight,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
                     }
                 }
             }
