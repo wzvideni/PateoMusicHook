@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
@@ -51,6 +52,9 @@ fun FontColorDialog(
     )
     val otherLyricsSize by mainDataStore.otherLyricsSize.collectAsStateWithLifecycle(
         MainDataStore.defaultOtherLyricsSize
+    )
+    val lyricsLineSpacing by mainDataStore.lyricsLineSpacing.collectAsStateWithLifecycle(
+        MainDataStore.defaultLyricsLineSpacing
     )
     var tabIndex by remember { mutableIntStateOf(0) }
 
@@ -98,44 +102,73 @@ fun FontColorDialog(
 
                     // 快速调节：可见行数
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(text = "可见行数：$lyricsVisibleLines")
-                        Button(onClick = {
-                            val newLines = (lyricsVisibleLines + 1).coerceIn(1, 7)
-                            coroutineScope.launch { mainDataStore.setLyricsVisibleLines(newLines) }
-                        }) { Text("＋行") }
-                        Button(onClick = {
-                            val newLines = (lyricsVisibleLines - 1).coerceAtLeast(1)
-                            coroutineScope.launch { mainDataStore.setLyricsVisibleLines(newLines) }
-                        }) { Text("－行") }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = {
+                                val newLines = (lyricsVisibleLines + 1).coerceIn(1, 7)
+                                coroutineScope.launch { mainDataStore.setLyricsVisibleLines(newLines) }
+                            }) { Text("＋行") }
+                            OutlinedButton(onClick = {
+                                val newLines = (lyricsVisibleLines - 1).coerceAtLeast(1)
+                                coroutineScope.launch { mainDataStore.setLyricsVisibleLines(newLines) }
+                            }) { Text("－行") }
+                        }
                     }
 
                     // 快速调节：歌词字体大小
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(text = "歌词大小：${lyricsSize.value.toInt()}sp")
-                        Button(onClick = {
-                            val minSp = 10f
-                            val maxSp = 30f
-                            val newSize = (lyricsSize.value + 1f).coerceIn(minSp, maxSp)
-                            coroutineScope.launch { mainDataStore.setLyricsSize(newSize) }
-                        }) { Text("A＋") }
-                        Button(onClick = {
-                            val minSp = 10f
-                            val maxSp = 30f
-                            val newSize = (lyricsSize.value - 1f).coerceIn(minSp, maxSp)
-                            coroutineScope.launch { mainDataStore.setLyricsSize(newSize) }
-                        }) { Text("A－") }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = {
+                                val minSp = 10f
+                                val maxSp = 30f
+                                val newSize = (lyricsSize.value + 1f).coerceIn(minSp, maxSp)
+                                coroutineScope.launch { mainDataStore.setLyricsSize(newSize) }
+                            }) { Text("A＋") }
+                            OutlinedButton(onClick = {
+                                val minSp = 10f
+                                val maxSp = 30f
+                                val newSize = (lyricsSize.value - 1f).coerceIn(minSp, maxSp)
+                                coroutineScope.launch { mainDataStore.setLyricsSize(newSize) }
+                            }) { Text("A－") }
+                        }
+                    }
+
+                    // 快速调节：当前句与下一句的间距
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(text = "行间距：${lyricsLineSpacing.value.toInt()}dp")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = {
+                                val minDp = 0f
+                                val maxDp = 24f
+                                val newSpacing = (lyricsLineSpacing.value + 1f).coerceIn(minDp, maxDp)
+                                coroutineScope.launch { mainDataStore.setLyricsLineSpacing(newSpacing.dp) }
+                            }) { Text("＋间距") }
+                            OutlinedButton(onClick = {
+                                val minDp = 0f
+                                val maxDp = 24f
+                                val newSpacing = (lyricsLineSpacing.value - 1f).coerceIn(minDp, maxDp)
+                                coroutineScope.launch { mainDataStore.setLyricsLineSpacing(newSpacing.dp) }
+                            }) { Text("－间距") }
+                        }
                     }
                 }
 
@@ -151,24 +184,27 @@ fun FontColorDialog(
 
                     // 快速调节：翻译字体大小
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 6.dp)
+                            .padding(top = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(text = "翻译大小：${translationSize.value.toInt()}sp")
-                        Button(onClick = {
-                            val minSp = 10f
-                            val maxSp = 30f
-                            val newSize = (translationSize.value + 1f).coerceIn(minSp, maxSp)
-                            coroutineScope.launch { mainDataStore.setTranslationSize(newSize) }
-                        }) { Text("A＋") }
-                        Button(onClick = {
-                            val minSp = 10f
-                            val maxSp = 30f
-                            val newSize = (translationSize.value - 1f).coerceIn(minSp, maxSp)
-                            coroutineScope.launch { mainDataStore.setTranslationSize(newSize) }
-                        }) { Text("A－") }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = {
+                                val minSp = 10f
+                                val maxSp = 30f
+                                val newSize = (translationSize.value + 1f).coerceIn(minSp, maxSp)
+                                coroutineScope.launch { mainDataStore.setTranslationSize(newSize) }
+                            }) { Text("A＋") }
+                            OutlinedButton(onClick = {
+                                val minSp = 10f
+                                val maxSp = 30f
+                                val newSize = (translationSize.value - 1f).coerceIn(minSp, maxSp)
+                                coroutineScope.launch { mainDataStore.setTranslationSize(newSize) }
+                            }) { Text("A－") }
+                        }
                     }
                 }
 
@@ -184,24 +220,27 @@ fun FontColorDialog(
 
                     // 快速调节：其他歌词字体大小
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 6.dp)
+                            .padding(top = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(text = "其他大小：${otherLyricsSize.value.toInt()}sp")
-                        Button(onClick = {
-                            val minSp = 10f
-                            val maxSp = 30f
-                            val newSize = (otherLyricsSize.value + 1f).coerceIn(minSp, maxSp)
-                            coroutineScope.launch { mainDataStore.setOtherLyricsSize(newSize) }
-                        }) { Text("A＋") }
-                        Button(onClick = {
-                            val minSp = 10f
-                            val maxSp = 30f
-                            val newSize = (otherLyricsSize.value - 1f).coerceIn(minSp, maxSp)
-                            coroutineScope.launch { mainDataStore.setOtherLyricsSize(newSize) }
-                        }) { Text("A－") }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = {
+                                val minSp = 10f
+                                val maxSp = 30f
+                                val newSize = (otherLyricsSize.value + 1f).coerceIn(minSp, maxSp)
+                                coroutineScope.launch { mainDataStore.setOtherLyricsSize(newSize) }
+                            }) { Text("A＋") }
+                            OutlinedButton(onClick = {
+                                val minSp = 10f
+                                val maxSp = 30f
+                                val newSize = (otherLyricsSize.value - 1f).coerceIn(minSp, maxSp)
+                                coroutineScope.launch { mainDataStore.setOtherLyricsSize(newSize) }
+                            }) { Text("A－") }
+                        }
                     }
                 }
             }
