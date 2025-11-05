@@ -5,32 +5,26 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.view.Gravity
 import android.view.WindowManager
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -245,6 +239,11 @@ private fun FloatingLyricsContent(
         MainDataStore.defaultOtherLyricsWeight
     )
 
+    // 获取歌曲信息
+    val songName by mainViewModel.songName.collectAsStateWithLifecycle()
+    val albumName by mainViewModel.albumName.collectAsStateWithLifecycle()
+    val albumPic by mainViewModel.albumPic.collectAsStateWithLifecycle()
+
     // 使用完整列表 + 平滑滚动，让滚动更自然
     val listState = rememberLazyListState()
     val density = LocalDensity.current
@@ -325,7 +324,8 @@ private fun FloatingLyricsContent(
             // 平滑滚动到当前歌词附近位置（居中偏移）
             LaunchedEffect(musicLyricsIndex, lyricsVisibleLines) {
                 val startIndex = (musicLyricsIndex - centerOffset).coerceAtLeast(0)
-                val lastStart = (musicLyricsList.lastIndex - lyricsVisibleLines + 1).coerceAtLeast(0)
+                val lastStart =
+                    (musicLyricsList.lastIndex - lyricsVisibleLines + 1).coerceAtLeast(0)
                 val targetIndex = startIndex.coerceAtMost(lastStart)
                 val scrollOffsetPx = (perLineApproxPx * centerOffset).toInt()
                 listState.animateScrollToItem(targetIndex, scrollOffsetPx)

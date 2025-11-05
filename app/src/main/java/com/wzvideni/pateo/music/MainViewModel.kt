@@ -21,6 +21,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val songMid: StateFlow<String?> = _songMid
     fun setSongMid(songMid: String?) = _songMid.set(songMid)
 
+    // 歌曲名
+    private val _songName: MutableStateFlow<String?> = MutableStateFlow(null)
+    val songName: StateFlow<String?> = _songName
+    fun setSongName(songName: String?) = _songName.set(songName)
+
+    // 专辑名
+    private val _albumName: MutableStateFlow<String?> = MutableStateFlow(null)
+    val albumName: StateFlow<String?> = _albumName
+    fun setAlbumName(albumName: String?) = _albumName.set(albumName)
+
+    // 专辑图片
+    private val _albumPic: MutableStateFlow<String?> = MutableStateFlow(null)
+    val albumPic: StateFlow<String?> = _albumPic
+    fun setAlbumPic(albumPic: String?) = _albumPic.set(albumPic)
+
     // 音乐播放位置
     private val _musicPlayingPosition: MutableStateFlow<Long> = MutableStateFlow(0L)
     val musicPlayingPosition: StateFlow<Long> = _musicPlayingPosition

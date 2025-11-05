@@ -3,7 +3,6 @@ package com.wzvideni.pateo.music
 import android.app.Application
 import android.content.Context.WINDOW_SERVICE
 import android.view.WindowManager
-import androidx.compose.ui.platform.ComposeView
 import com.highcapable.betterandroid.system.extension.tool.AndroidVersion
 import com.highcapable.kavaref.KavaRef.Companion.resolve
 import com.highcapable.yukihookapi.annotation.xposed.InjectYukiHookWithXposed
@@ -25,8 +24,6 @@ class MainHookEntry : IYukiHookXposedInit {
     lateinit var mainViewModel: MainViewModel
     lateinit var mainDataStore: MainDataStore
     lateinit var floatingLyricsHandle: FloatingLyricsOverlay.Handle
-    lateinit var floatingSettingsView: ComposeView
-
 
     lateinit var windowManager: WindowManager
 
@@ -47,7 +44,6 @@ class MainHookEntry : IYukiHookXposedInit {
             val handle = floatingLyricsHandle
             if (handle.view.parent == null) {
                 windowManager.addView(handle.view, handle.layoutParams)
-//                windowManager.addView(floatingSettingsView, unlockedWindowParams)
                 FloatingLyricsOverlay.updateLifecycleToResumed()
                 application.toast("启动悬浮窗")
             }
@@ -83,79 +79,6 @@ class MainHookEntry : IYukiHookXposedInit {
                         isMockMode = false,
                         initialPosition = initialPosition
                     )
-
-//                    floatingSettingsView = ComposeView(this).apply {
-//                        setViewTreeLifecycleOwner(FloatingWindowLifecycleOwner)
-//                        setViewTreeSavedStateRegistryOwner(FloatingWindowLifecycleOwner)
-//                        setContent {
-//                            var showColorPicker by remember { mutableStateOf(false) }
-//                            var showStylePicker by remember { mutableStateOf(false) }
-//                            val configuration = LocalConfiguration.current
-//                            val density = LocalDensity.current
-//
-//                            val screenHeightPx =
-//                                with(density) { configuration.screenHeightDp.dp.toPx() }
-//
-//                            var offsetX by remember { mutableFloatStateOf(0f) }
-//                            var offsetY by remember { mutableFloatStateOf(screenHeightPx / 2f) } // 屏幕高度一半
-//
-//                            Row(
-//                                modifier = Modifier
-//                                    .offset { IntOffset(offsetX.toInt(), offsetY.toInt()) }
-//                                    .pointerInput(Unit) {
-//                                        detectDragGestures { change, dragAmount ->
-//                                            change.consume()
-//                                            offsetX += dragAmount.x
-//                                            offsetY += dragAmount.y
-//                                        }
-//                                    }
-//                                    .padding(horizontal = 15.dp)
-//                                    .padding(bottom = 10.dp),
-//                                verticalAlignment = Alignment.CenterVertically,
-//                                horizontalArrangement = Arrangement.spacedBy(20.dp)
-//                            ) {
-//                                // 字体颜色选择
-//                                Icon(
-//                                    imageVector = Icons.Default.ColorLens,
-//                                    contentDescription = null,
-//                                    tint = BasicSelector.tintColor(showColorPicker),
-//                                    modifier = Modifier
-//                                        .size(50.dp)
-//                                        .pointerInput(Unit) {
-//                                            detectTapGestures {
-//                                                showColorPicker = true
-//                                            }
-//                                        }
-//                                )
-//
-//                                // 字体大小选择
-//                                Icon(
-//                                    imageVector = Icons.Default.TextFields,
-//                                    contentDescription = null,
-//                                    tint = BasicSelector.tintColor(showStylePicker),
-//                                    modifier = Modifier
-//                                        .size(50.dp)
-//                                        .pointerInput(Unit) {
-//                                            detectTapGestures {
-//                                                showStylePicker = true
-//                                            }
-//                                        }
-//                                )
-//                            }
-//
-//                            if (showColorPicker) {
-//                                FontColorDialog(mainDataStore = mainDataStore) {
-//                                    showColorPicker = false
-//                                }
-//                            }
-//
-//                            if (showStylePicker) {
-//                                FontStyleDialog(mainDataStore = mainDataStore) {
-//                                    showStylePicker = false
-//                                }
-//                            }
-//                        }
-//                    }
                     addFloatingComposeView(this)
                 }
             }
@@ -171,8 +94,15 @@ class MainHookEntry : IYukiHookXposedInit {
                             YLog.debug("onSongInfoUpdate: $songInfo")
                             val songId = "$songInfo".getValueOf("songId")
                             val songMid = "$songInfo".getValueOf("songMid")
+                            val songName = "$songInfo".getValueOf("songName")
+                            val albumName = "$songInfo".getValueOf("albumName")
+                            val albumPic = "$songInfo".getValueOf("albumPic500x500")
                             mainViewModel.setSongId(songId)
                             mainViewModel.setSongMid(songMid)
+                            mainViewModel.setSongName(songName)
+                            mainViewModel.setAlbumName(albumName)
+                            mainViewModel.setAlbumPic(albumPic)
+
                             YLog.debug("songId: $songId")
                             YLog.debug("songMid: $songMid")
 

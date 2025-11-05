@@ -101,7 +101,8 @@ fun FontColorDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 6.dp)
+                            .padding(top = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(text = "可见行数：$lyricsVisibleLines")
                         Button(onClick = {
@@ -119,7 +120,8 @@ fun FontColorDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 2.dp)
+                            .padding(top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(text = "歌词大小：${lyricsSize.value.toInt()}sp")
                         Button(onClick = {
