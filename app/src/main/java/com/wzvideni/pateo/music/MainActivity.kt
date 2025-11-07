@@ -15,15 +15,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,6 +60,8 @@ class MainActivity : ComponentActivity() {
     private var locationPermissionGranted by mutableStateOf(false)
     private var isOverlayActive by mutableStateOf(false)
     private var isTraccarRunning by mutableStateOf(false)
+    private var isTaskerMockEnabled by mutableStateOf(true)
+    private var autostartEnabled by mutableStateOf(false)
 
     private var windowManager: WindowManager? = null
     private var floatingLyricsHandle: FloatingLyricsOverlay.Handle? = null
@@ -68,7 +75,8 @@ class MainActivity : ComponentActivity() {
         isMockMode = resources.getBoolean(R.bool.is_mock_mode)
 
         if (isMockMode) {
-            windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+            // 使用 Application 级的 WindowManager，避免某些 ROM 对 Activity 上下文的限制
+            windowManager = application.getSystemService(WINDOW_SERVICE) as WindowManager
             mainViewModel = MainViewModel(application)
             mainDataStore = MainDataStore(application)
             val initialPosition = runBlocking {
@@ -95,11 +103,19 @@ class MainActivity : ComponentActivity() {
                     locationPermissionGranted = locationPermissionGranted,
                     isOverlayActive = isOverlayActive,
                     isTraccarRunning = isTraccarRunning,
+                    autostartEnabled = autostartEnabled,
+                    taskerMockEnabled = isTaskerMockEnabled,
                     onRequestOverlayPermission = ::openOverlaySettings,
                     onOpenLocationPermissionSettings = ::openLocationPermissionSettings,
                     onStartOverlay = ::attachFloatingLyrics,
                     onStopOverlay = ::detachFloatingLyrics,
-                    onOpenTraccarConsole = { startActivity(Intent(this, com.wzvideni.traccar.ui.TraccarActivity::class.java)) }
+                    onOpenTraccarConsole = { startActivity(Intent(this, com.wzvideni.traccar.ui.TraccarActivity::class.java)) },
+                    onToggleTaskerMock = {
+                        isTaskerMockEnabled = !isTaskerMockEnabled
+                        com.wzvideni.pateo.music.tasker.LyricsTaskerEvent.allowInMockMode = isTaskerMockEnabled
+                        com.wzvideni.pateo.music.tasker.MetadataTaskerEvent.allowInMockMode = isTaskerMockEnabled
+                        toast(if (isTaskerMockEnabled) "模拟模式将触发 Tasker 事件" else "模拟模式不再触发 Tasker 事件")
+                    }
                 )
             }
         }
@@ -114,6 +130,11 @@ class MainActivity : ComponentActivity() {
         ) == PackageManager.PERMISSION_GRANTED
         isTraccarRunning = PreferenceManager.getDefaultSharedPreferences(this)
             .getBoolean("status", false)
+        autostartEnabled = runCatching {
+            getSharedPreferences("autostart_prefs", MODE_PRIVATE).getBoolean("enabled", false)
+        }.getOrElse { false }
+        com.wzvideni.pateo.music.tasker.LyricsTaskerEvent.allowInMockMode = isTaskerMockEnabled
+        com.wzvideni.pateo.music.tasker.MetadataTaskerEvent.allowInMockMode = isTaskerMockEnabled
         // 默认不自动启动模拟悬浮歌词，保持关闭状态，需手动点击按钮启动
     }
 
@@ -133,13 +154,26 @@ class MainActivity : ComponentActivity() {
         }
         overlayPermissionGranted = true
         if (handle.view.parent == null) {
-            windowManager.addView(handle.view, handle.layoutParams)
-            FloatingLyricsOverlay.updateLifecycleToResumed()
+            runCatching {
+                windowManager.addView(handle.view, handle.layoutParams)
+                FloatingLyricsOverlay.updateLifecycleToResumed()
+                if (!isOverlayActive) {
+                    toast("启动模拟悬浮歌词")
+                }
+                isOverlayActive = true
+            }.onFailure { e ->
+                val perm = checkDrawOverlays()
+                val sdk = android.os.Build.VERSION.SDK_INT
+                val type = handle.layoutParams.type
+                val flags = handle.layoutParams.flags
+                toast("启动失败：${e.javaClass.simpleName}${e.message?.let { ": $it" } ?: ""}\nperm=${perm}, sdk=${sdk}, type=${type}, flags=${flags}")
+            }
+        } else {
+            if (!isOverlayActive) {
+                toast("启动模拟悬浮歌词")
+            }
+            isOverlayActive = true
         }
-        if (!isOverlayActive) {
-            toast("启动模拟悬浮歌词")
-        }
-        isOverlayActive = true
     }
 
     private fun detachFloatingLyrics() {
@@ -184,67 +218,136 @@ private fun MockModeScreen(
     locationPermissionGranted: Boolean,
     isOverlayActive: Boolean,
     isTraccarRunning: Boolean,
+    autostartEnabled: Boolean,
+    taskerMockEnabled: Boolean,
     onRequestOverlayPermission: () -> Unit,
     onOpenLocationPermissionSettings: () -> Unit,
     onStartOverlay: () -> Unit,
     onStopOverlay: () -> Unit,
     onOpenTraccarConsole: () -> Unit,
+    onToggleTaskerMock: () -> Unit,
 ) {
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(24.dp),
-        contentAlignment = Alignment.Center
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         if (!isMockMode) {
-            Text(
-                text = "当前为正常模式，请在 LSPosed 环境下体验完整功能。",
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center
-            )
-        } else {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                ButtonWithStatusDot(
-                    text = "打开悬浮窗权限设置",
-                    onClick = onRequestOverlayPermission,
-                    active = overlayPermissionGranted
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "当前为正常模式，请在 LSPosed 环境下体验完整功能。",
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center
                 )
-                ButtonWithStatusDot(
-                    text = "打开定位权限设置",
-                    onClick = onOpenLocationPermissionSettings,
-                    active = locationPermissionGranted
-                )
-                Button(
-                    onClick = { if (!isOverlayActive) onStartOverlay() else onStopOverlay() },
-                    enabled = overlayPermissionGranted,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (!isOverlayActive)
-                            MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = if (!isOverlayActive)
-                            MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            }
+            return
+        }
+
+        // 2x2 网格，卡片居中且不占满全屏
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally)) {
+                GridBlock(
+                    modifier = Modifier.width(520.dp).heightIn(min = 320.dp, max = 320.dp),
+                    title = "打开权限",
+                    statusActive = overlayPermissionGranted && locationPermissionGranted,
+                    description = "授予悬浮窗与定位权限，确保界面与位置服务正常",
                 ) {
-                    Text(text = if (!isOverlayActive) "启动模拟悬浮歌词" else "关闭模拟悬浮歌词")
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ButtonWithStatusDot(
+                            text = "悬浮窗权限",
+                            onClick = onRequestOverlayPermission,
+                            active = overlayPermissionGranted
+                        )
+                        ButtonWithStatusDot(
+                            text = "定位权限",
+                            onClick = onOpenLocationPermissionSettings,
+                            active = locationPermissionGranted
+                        )
+                    }
                 }
-                ButtonWithStatusDot(
-                    text = "打开位置跟踪控制台",
-                    onClick = onOpenTraccarConsole,
-                    active = isTraccarRunning
-                )
-                val ctx = LocalContext.current
-                Button(onClick = { ctx.startActivity(Intent(ctx, com.wzvideni.pateo.music.autostart.AutoStartSettingsActivity::class.java)) }) {
-                    Text(text = "开机自启动设置")
+
+                GridBlock(
+                    modifier = Modifier.width(520.dp).heightIn(min = 320.dp, max = 320.dp),
+                    title = "触发 Tasker 事件",
+                    statusActive = taskerMockEnabled,
+                    description = "默认开启。\n\n动作（Action）：\n- 歌词事件： com.wzvideni.pateo.music.LYRICS_CHANGED\n- 歌曲信息事件： com.wzvideni.pateo.music.SONGINFO_CHANGED\n\nSONGINFO_CHANGED 提供的变量：\n- %singer_name ：歌手名\n- %song_name ：歌名\n- %album_name ：专辑名\n- %album_pic ：专辑封面 URL\n\nLYRICS_CHANGED 提供的变量：\n- %lyric_text ：当前歌词文本（与 %lyric_current 相同，保留兼容）\n- %lyric_current ：当前行歌词文本\n- %lyric_second ：翻译/第二行歌词（可能不存在）",
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ButtonWithStatusDot(
+                            text = "切换开关",
+                            onClick = onToggleTaskerMock,
+                            active = taskerMockEnabled
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            StatusDot(active = taskerMockEnabled)
+                            Text(text = "LYRICS_CHANGED（歌词事件）跟随开关启用", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            StatusDot(active = taskerMockEnabled)
+                            Text(text = "SONGINFO_CHANGED（歌曲信息事件）跟随开关启用", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
                 }
-                if (isOverlayActive) {
-                    Text(
-                        text = "模拟悬浮歌词已启动，可切换应用查看显示效果。",
-                        textAlign = TextAlign.Center
-                    )
+            }
+
+            Spacer(modifier = Modifier.size(24.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally)) {
+                GridBlock(
+                    modifier = Modifier.width(520.dp).heightIn(min = 320.dp, max = 320.dp),
+                    title = "位置跟踪与自启",
+                    statusActive = isTraccarRunning || autostartEnabled,
+                    description = "Traccar 位置服务与开机自启动",
+                ) {
+                    val ctx = LocalContext.current
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ButtonWithStatusDot(
+                            text = "打开位置跟踪控制台",
+                            onClick = onOpenTraccarConsole,
+                            active = isTraccarRunning
+                        )
+                        ButtonWithStatusDot(
+                            text = "开机自启动设置",
+                            onClick = { ctx.startActivity(Intent(ctx, com.wzvideni.pateo.music.autostart.AutoStartSettingsActivity::class.java)) },
+                            active = autostartEnabled
+                        )
+                    }
+                }
+
+                GridBlock(
+                    modifier = Modifier.width(520.dp).heightIn(min = 320.dp, max = 320.dp),
+                    title = "调试",
+                    statusActive = isOverlayActive,
+                    description = "模拟悬浮歌词用于调试，1920×1080 适配",
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(
+                            onClick = { if (!isOverlayActive) onStartOverlay() else onStopOverlay() },
+                            enabled = overlayPermissionGranted,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (!isOverlayActive)
+                                    MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (!isOverlayActive)
+                                    MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        ) { Text(text = if (!isOverlayActive) "启动模拟悬浮歌词" else "关闭模拟悬浮歌词") }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        StatusDot(active = isOverlayActive)
+                    }
+                    if (isOverlayActive) {
+                        Text(
+                            text = "模拟悬浮歌词已启动，可切换应用查看显示效果。",
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
             }
         }
@@ -261,6 +364,34 @@ private fun StatusDot(active: Boolean) {
             .clip(CircleShape)
             .background(color)
     )
+}
+
+@Composable
+private fun GridBlock(
+    modifier: Modifier = Modifier,
+    title: String,
+    statusActive: Boolean,
+    description: String,
+    content: @Composable () -> Unit,
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = title, style = MaterialTheme.typography.titleMedium)
+                StatusDot(active = statusActive)
+            }
+            Text(text = description, style = MaterialTheme.typography.bodySmall)
+            content()
+        }
+    }
 }
 
 @Composable

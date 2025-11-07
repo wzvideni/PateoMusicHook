@@ -50,6 +50,7 @@ import com.wzvideni.pateo.music.MainViewModel
 import com.wzvideni.pateo.music.data.mockLyrics
 import com.wzvideni.pateo.music.dialog.font_color.FontColorDialog
 import com.wzvideni.pateo.music.lifecycle.FloatingWindowLifecycleOwner
+import com.wzvideni.pateo.music.ui.theme.PateoMusicHookTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -84,12 +85,14 @@ object FloatingLyricsOverlay {
         )
 
         composeView.setContent {
-            FloatingLyricsContent(
-                mainViewModel = mainViewModel,
-                mainDataStore = mainDataStore,
-                isMockMode = isMockMode,
-                dragController = dragController
-            )
+            PateoMusicHookTheme(dynamicColor = false) {
+                FloatingLyricsContent(
+                    mainViewModel = mainViewModel,
+                    mainDataStore = mainDataStore,
+                    isMockMode = isMockMode,
+                    dragController = dragController
+                )
+            }
         }
 
         return Handle(composeView, layoutParams)

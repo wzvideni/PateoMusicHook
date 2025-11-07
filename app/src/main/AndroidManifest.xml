@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
     <!-- Package visibility for launcher activities -->
     <queries>
@@ -81,6 +82,17 @@
             android:name=".autostart.AutoStartSettingsActivity"
             android:exported="false"
             android:screenOrientation="behind" />
+
+        <!-- Tasker 插件事件配置页面：歌词变化事件 -->
+        <activity
+            android:name=".tasker.LyricsEventConfigActivity"
+            android:exported="true"
+            android:label="Lyrics Changed"
+            android:screenOrientation="behind">
+            <intent-filter>
+                <action android:name="net.dinglisch.android.tasker.ACTION_EDIT_EVENT" />
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>

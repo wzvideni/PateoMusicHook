@@ -7,6 +7,8 @@ import com.highcapable.yukihookapi.hook.log.YLog
 import com.wzvideni.pateo.music.data.Lyric
 import com.wzvideni.pateo.music.data.qqMusicLyricRequest
 import com.wzvideni.pateo.music.expansion.set
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -24,21 +26,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // 歌曲名
     private val _songName: MutableStateFlow<String?> = MutableStateFlow(null)
     val songName: StateFlow<String?> = _songName
-    fun setSongName(songName: String?) = _songName.set(songName)
+    fun setSongName(songName: String?) {
+        if (_songName.value == songName) return
+        _songName.set(songName)
+        onMetadataFieldChanged()
+    }
 
     private val _singerName: MutableStateFlow<String?> = MutableStateFlow(null)
     val singerName: StateFlow<String?> = _singerName
-    fun setSingerName(singerName: String?) = _singerName.set(singerName)
+    fun setSingerName(singerName: String?) {
+        if (_singerName.value == singerName) return
+        _singerName.set(singerName)
+        onMetadataFieldChanged()
+    }
 
     // 专辑名
     private val _albumName: MutableStateFlow<String?> = MutableStateFlow(null)
     val albumName: StateFlow<String?> = _albumName
-    fun setAlbumName(albumName: String?) = _albumName.set(albumName)
+    fun setAlbumName(albumName: String?) {
+        if (_albumName.value == albumName) return
+        _albumName.set(albumName)
+        onMetadataFieldChanged()
+    }
 
     // 专辑图片
     private val _albumPic: MutableStateFlow<String?> = MutableStateFlow(null)
     val albumPic: StateFlow<String?> = _albumPic
-    fun setAlbumPic(albumPic: String?) = _albumPic.set(albumPic)
+    fun setAlbumPic(albumPic: String?) {
+        if (_albumPic.value == albumPic) return
+        _albumPic.set(albumPic)
+        onMetadataFieldChanged()
+    }
 
     // 音乐播放位置
     private val _musicPlayingPosition: MutableStateFlow<Long> = MutableStateFlow(0L)
@@ -58,7 +76,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // 音乐歌词索引
     private val _musicLyricsIndex: MutableStateFlow<Int> = MutableStateFlow(0)
     val musicLyricsIndex: StateFlow<Int> = _musicLyricsIndex
-    fun setMusicLyricsIndex(value: Int) = _musicLyricsIndex.set(value)
+    fun setMusicLyricsIndex(value: Int) {
+        _musicLyricsIndex.set(value)
+        // 当歌词索引更新时，触发 Tasker 事件用于外部自动化
+        // 仅取原歌词（索引 0），不包含翻译
+        val currentLyricText = _musicLyricsList.value.getOrNull(value)?.lyricsList?.getOrNull(0)
+        // 查找下一句原歌词（向后查找第一个存在索引 0 的条目），不包含翻译
+        val secondLyricText = run {
+            val list = _musicLyricsList.value
+            var j = value + 1
+            var next: String? = null
+            while (j < list.size && next == null) {
+                next = list.getOrNull(j)?.lyricsList?.getOrNull(0)
+                j++
+            }
+            next
+        }
+        com.wzvideni.pateo.music.tasker.LyricsTaskerEvent.trigger(getApplication(), currentLyricText, secondLyricText, value)
+    }
 
     // 音乐歌词列表
     private val _musicLyricsList: MutableStateFlow<List<Lyric>> = MutableStateFlow(emptyList())
@@ -75,6 +110,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _musicPlayingPosition.collect {
                 findCurrentLyrics(_musicLyricsList.value)
+            }
+        }
+    }
+
+    // 元数据变化合并与去重：短延迟后统一输出一次，避免连续四次 setter 触发四次广播
+    private var metadataChanged: Boolean = false
+    private var metadataDebounceJob: Job? = null
+    private fun onMetadataFieldChanged() {
+        metadataChanged = true
+        metadataDebounceJob?.cancel()
+        metadataDebounceJob = viewModelScope.launch {
+            delay(80)
+            if (metadataChanged) {
+                metadataChanged = false
+                com.wzvideni.pateo.music.tasker.MetadataTaskerEvent.trigger(
+                    getApplication(),
+                    _singerName.value,
+                    _songName.value,
+                    _albumName.value,
+                    _albumPic.value,
+                )
             }
         }
     }

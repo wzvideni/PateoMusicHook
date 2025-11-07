@@ -101,7 +101,7 @@ class MainHookEntry : IYukiHookXposedInit {
                             mainViewModel.setSongId(songId)
                             mainViewModel.setSongMid(songMid)
                             mainViewModel.setSongName(songName)
-                            mainViewModel.setAlbumName(singerName)
+                            mainViewModel.setSingerName(singerName)
                             mainViewModel.setAlbumName(albumName)
                             mainViewModel.setAlbumPic(albumPic)
 

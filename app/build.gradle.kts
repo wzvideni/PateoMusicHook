@@ -95,56 +95,61 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-compose:3.3.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
 
-    implementation(com.google.code.gson.gson)
+    // Core libraries
+    implementation("com.google.code.gson:gson:2.13.2")
 
-    implementation(com.squareup.okhttp3.okhttp)
-    implementation(com.squareup.okhttp3.logging.interceptor)
+    // OkHttp
+    implementation("com.squareup.okhttp3:okhttp:5.2.1")
+    implementation("com.squareup.okhttp3:logging-interceptor:5.2.1")
 
     // Protocol Buffers
-    implementation(com.google.protobuf.protobuf.kotlin)
-    implementation(androidx.datastore.datastore)
+    implementation("com.google.protobuf:protobuf-kotlin:4.32.1")
+    implementation("androidx.datastore:datastore:1.1.7")
 
     // Navigation
-    implementation(androidx.navigation.navigation.compose)
+    implementation("androidx.navigation:navigation-compose:2.9.3")
 
     // Compose
-    implementation(androidx.compose.ui.ui)
-    implementation(androidx.compose.ui.ui.graphics)
-    implementation(androidx.compose.ui.ui.tooling.preview)
+    implementation("androidx.compose.ui:ui:1.9.3")
+    implementation("androidx.compose.ui:ui-graphics:1.9.3")
+    implementation("androidx.compose.ui:ui-tooling-preview:1.9.3")
     // Material
-    implementation(androidx.compose.material3.material3)
-    implementation(androidx.compose.material.material.icons.core)
-    implementation(androidx.compose.material.material.icons.extended)
+    implementation("androidx.compose.material3:material3:1.4.0")
+    implementation("androidx.compose.material:material-icons-core:1.7.8")
+    implementation("androidx.compose.material:material-icons-extended:1.7.8")
     // Animations
-    implementation(androidx.compose.animation.animation)
-    implementation(androidx.compose.animation.animation.core)
-    implementation(androidx.compose.animation.animation.graphics)
+    implementation("androidx.compose.animation:animation:1.9.3")
+    implementation("androidx.compose.animation:animation-core:1.9.3")
+    implementation("androidx.compose.animation:animation-graphics:1.9.3")
 
     // AndroidX
-    implementation(androidx.activity.activity.compose)
-    implementation(androidx.compose.runtime.runtime)
-    implementation(androidx.core.core.ktx)
+    implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.compose.runtime:runtime:1.9.3")
+    implementation("androidx.core:core-ktx:1.17.0")
     // Preferences
     implementation("androidx.preference:preference-ktx:1.2.1")
 
     // Lifecycle
-    implementation(androidx.lifecycle.lifecycle.runtime.ktx)
-    implementation(androidx.lifecycle.lifecycle.viewmodel.ktx)
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.4")
 
-    compileOnly(de.robv.android.xposed.api)
-    ksp(com.highcapable.yukihookapi.ksp.xposed)
-    implementation(com.highcapable.yukihookapi.api)
+    compileOnly("de.robv.android.xposed:api:82")
+    ksp("com.highcapable.yukihookapi:ksp-xposed:1.3.1")
+    implementation("com.highcapable.yukihookapi:api:1.3.1")
 
     // Optional: KavaRef (https://github.com/HighCapable/KavaRef)
-    implementation(com.highcapable.kavaref.kavaref.core)
-    implementation(com.highcapable.kavaref.kavaref.extension)
+    implementation("com.highcapable.kavaref:kavaref-core:1.0.2")
+    implementation("com.highcapable.kavaref:kavaref-extension:1.0.1")
 
     // Optional: BetterAndroid (https://github.com/BetterAndroid/BetterAndroid)
-    implementation(com.highcapable.betterandroid.system.extension)
+    implementation("com.highcapable.betterandroid:system-extension:1.0.3")
 
-    testImplementation(junit.junit)
-    androidTestImplementation(androidx.test.ext.junit)
-    androidTestImplementation(androidx.test.espresso.espresso.core)
+    // Tasker Plugin Library (for Tasker event integration)
+    implementation("com.joaomgcd:taskerpluginlibrary:0.4.10")
+
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
 }
 
 tasks.named<Delete>("clean") {
