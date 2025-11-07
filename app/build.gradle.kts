@@ -91,6 +91,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":traccarui"))
     implementation("io.coil-kt.coil3:coil-compose:3.3.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
 
@@ -123,6 +124,8 @@ dependencies {
     implementation(androidx.activity.activity.compose)
     implementation(androidx.compose.runtime.runtime)
     implementation(androidx.core.core.ktx)
+    // Preferences
+    implementation("androidx.preference:preference-ktx:1.2.1")
 
     // Lifecycle
     implementation(androidx.lifecycle.lifecycle.runtime.ktx)

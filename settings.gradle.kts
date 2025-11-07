@@ -14,3 +14,5 @@ sweetProperty {
 }
 rootProject.name = "PateoMusicHook"
 include(":app")
+include(":traccarclient")
+include(":traccarui")
