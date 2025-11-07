@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
@@ -235,6 +236,10 @@ private fun MockModeScreen(
                     onClick = onOpenTraccarConsole,
                     active = isTraccarRunning
                 )
+                val ctx = LocalContext.current
+                Button(onClick = { ctx.startActivity(Intent(ctx, com.wzvideni.pateo.music.autostart.AutoStartSettingsActivity::class.java)) }) {
+                    Text(text = "开机自启动设置")
+                }
                 if (isOverlayActive) {
                     Text(
                         text = "模拟悬浮歌词已启动，可切换应用查看显示效果。",
