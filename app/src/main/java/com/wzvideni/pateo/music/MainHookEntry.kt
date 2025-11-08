@@ -123,6 +123,10 @@ class MainHookEntry : IYukiHookXposedInit {
                             mainViewModel.setMusicPlayingPosition(
                                 currentTime.toString().toLongOrNull() ?: 0
                             )
+                            // 同步总时长到 HookState，供 Action 读取
+                            com.wzvideni.pateo.music.tasker.HookState.durationMs =
+                                totalTime.toString().toLongOrNull()
+                            com.wzvideni.pateo.music.tasker.HookState.timestamp = System.currentTimeMillis()
                             YLog.debug("onProgressChanged: $currentTime/$totalTime")
 //                            application.toast("onProgressChanged: $currentTime/$totalTime")
                         }

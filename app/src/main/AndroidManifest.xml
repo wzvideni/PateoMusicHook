@@ -92,6 +92,51 @@
             <intent-filter>
                 <action android:name="net.dinglisch.android.tasker.ACTION_EDIT_EVENT" />
             </intent-filter>
+            <meta-data
+                android:name="tasker-plugin-event"
+                android:value="true" />
+        </activity>
+
+        <!-- Tasker 插件事件配置页面：歌曲信息变化事件 -->
+        <activity
+            android:name=".tasker.MetadataEventConfigActivity"
+            android:exported="true"
+            android:label="Song Info Changed"
+            android:screenOrientation="behind">
+            <intent-filter>
+                <action android:name="net.dinglisch.android.tasker.ACTION_EDIT_EVENT" />
+            </intent-filter>
+            <meta-data
+                android:name="tasker-plugin-event"
+                android:value="true" />
+        </activity>
+
+        <!-- Tasker 插件 Action 配置页面：输出歌词 -->
+        <activity
+            android:name=".tasker.LyricsActionConfigActivity"
+            android:exported="true"
+            android:label="Output Lyrics"
+            android:screenOrientation="behind">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
+            </intent-filter>
+            <meta-data
+                android:name="tasker-plugin-action"
+                android:value="true" />
+        </activity>
+
+        <!-- Tasker 插件 Action 配置页面：输出歌曲信息 -->
+        <activity
+            android:name=".tasker.MetadataActionConfigActivity"
+            android:exported="true"
+            android:label="Output Song Info"
+            android:screenOrientation="behind">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
+            </intent-filter>
+            <meta-data
+                android:name="tasker-plugin-action"
+                android:value="true" />
         </activity>
     </application>
 

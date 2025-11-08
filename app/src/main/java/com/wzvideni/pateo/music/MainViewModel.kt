@@ -29,6 +29,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setSongName(songName: String?) {
         if (_songName.value == songName) return
         _songName.set(songName)
+        com.wzvideni.pateo.music.tasker.HookState.title = songName
+        com.wzvideni.pateo.music.tasker.HookState.timestamp = System.currentTimeMillis()
         onMetadataFieldChanged()
     }
 
@@ -37,6 +39,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setSingerName(singerName: String?) {
         if (_singerName.value == singerName) return
         _singerName.set(singerName)
+        com.wzvideni.pateo.music.tasker.HookState.artist = singerName
+        com.wzvideni.pateo.music.tasker.HookState.timestamp = System.currentTimeMillis()
         onMetadataFieldChanged()
     }
 
@@ -46,6 +50,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setAlbumName(albumName: String?) {
         if (_albumName.value == albumName) return
         _albumName.set(albumName)
+        com.wzvideni.pateo.music.tasker.HookState.album = albumName
+        com.wzvideni.pateo.music.tasker.HookState.timestamp = System.currentTimeMillis()
         onMetadataFieldChanged()
     }
 
@@ -55,6 +61,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setAlbumPic(albumPic: String?) {
         if (_albumPic.value == albumPic) return
         _albumPic.set(albumPic)
+        com.wzvideni.pateo.music.tasker.HookState.albumPic = albumPic
+        com.wzvideni.pateo.music.tasker.HookState.timestamp = System.currentTimeMillis()
         onMetadataFieldChanged()
     }
 
@@ -62,6 +70,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _musicPlayingPosition: MutableStateFlow<Long> = MutableStateFlow(0L)
     val musicPlayingPosition: StateFlow<Long> = _musicPlayingPosition
     fun setMusicPlayingPosition(value: Long) = _musicPlayingPosition.set(value)
+        .also {
+            com.wzvideni.pateo.music.tasker.HookState.positionMs = value
+            com.wzvideni.pateo.music.tasker.HookState.timestamp = System.currentTimeMillis()
+        }
 
     // 音乐歌词
     private val _musicLyrics: MutableStateFlow<String> = MutableStateFlow("")
@@ -92,6 +104,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             next
         }
+        // 更新 HookState，供 Action 直接读取
+        com.wzvideni.pateo.music.tasker.HookState.lyric = currentLyricText
+        com.wzvideni.pateo.music.tasker.HookState.nextLyric = secondLyricText
+        com.wzvideni.pateo.music.tasker.HookState.index = value
+        com.wzvideni.pateo.music.tasker.HookState.timestamp = System.currentTimeMillis()
+
         com.wzvideni.pateo.music.tasker.LyricsTaskerEvent.trigger(getApplication(), currentLyricText, secondLyricText, value)
     }
 
@@ -148,6 +166,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // 以下变量皆是需要短时间内经常改变的，定义为常量创建的开销可能过大
         // 最后索引
         val lastIndex = lyricsList.lastIndex
+        // 若当前位置已经在最后一句时间点之后，直接选中最后一句，避免错过末尾更新
+        if (lastIndex >= 0) {
+            val positionNow = musicPlayingPosition.value
+            val lastLyric = lyricsList[lastIndex]
+            if (positionNow >= lastLyric.millisecond) {
+                setMusicLyricsIndex(lastIndex)
+                return lastLyric.lyricsList
+            }
+        }
         // 开始索引
         var beginIndex = 0
         // 结束索引
@@ -187,7 +214,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 beginIndex = midIndex + 1
             }
         }
-        // 没有找到就设置歌词索引为-1并返回单例空列表
+        // 没有在区间内找到：若歌词列表不为空且当前位置在最后一句之前，则默认保持当前逻辑返回第一句；
+        // 也可按需改为返回最后一句。为兼容现有行为，这里沿用返回第一句。
         setMusicLyricsIndex(0)
         return null
     }

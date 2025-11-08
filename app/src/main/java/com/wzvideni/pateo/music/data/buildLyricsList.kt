@@ -42,8 +42,8 @@ suspend fun buildLyricsList(
             minutes = timeline.substring(1, 3).toInt() * 60 * 1000
             // 分割字符串[4,6)区间为秒，再转换为Int值的毫秒
             seconds = timeline.substring(4, 6).toInt() * 1000
-            // 分割字符串[7,9)区间为毫秒，再加上分和秒对应的毫秒值
-            millisecond = timeline.substring(7, 9).toInt() + minutes + seconds
+            // 分割字符串[7,9)区间为百分之一秒 (centiseconds)，需转换为毫秒 (×10)
+            millisecond = timeline.substring(7, 9).toInt() * 10 + minutes + seconds
             // 判断毫秒时间轴键是否已存在于歌词字典，存在则证明此次添加的为翻译，不存在则代表添加的是原歌词
             lyric = line.replace(timeline, "").trim()
             // 跳过写入歌词列表

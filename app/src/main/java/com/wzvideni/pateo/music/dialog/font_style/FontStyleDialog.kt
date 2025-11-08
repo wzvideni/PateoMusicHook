@@ -6,9 +6,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -157,14 +159,20 @@ fun FontStyleDialog(
                     }
                 }
 
-                BasicNumberSlider(
-                    text = "歌词行数：",
-                    value = lyricsVisibleLines.toFloat(),
-                    valueRange = 1f..10f
-                ) { lines ->
-                    coroutineScope.launch {
-                        mainDataStore.setLyricsVisibleLines(lines.toInt())
-                    }
+                // 歌词行数：仅允许 2、3、5 排
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 6.dp)
+                ) {
+                    OutlinedButton(onClick = {
+                        coroutineScope.launch { mainDataStore.setLyricsVisibleLines(2) }
+                    }, enabled = lyricsVisibleLines != 2) { Text(text = "2排") }
+                    OutlinedButton(onClick = {
+                        coroutineScope.launch { mainDataStore.setLyricsVisibleLines(3) }
+                    }, enabled = lyricsVisibleLines != 3) { Text(text = "3排") }
+                    OutlinedButton(onClick = {
+                        coroutineScope.launch { mainDataStore.setLyricsVisibleLines(5) }
+                    }, enabled = lyricsVisibleLines != 5) { Text(text = "5排") }
                 }
 
                 BasicNumberSlider(

@@ -111,13 +111,14 @@ fun FontColorDialog(
                         Text(text = "可见行数：$lyricsVisibleLines")
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = {
-                                val newLines = (lyricsVisibleLines + 1).coerceIn(1, 7)
-                                coroutineScope.launch { mainDataStore.setLyricsVisibleLines(newLines) }
-                            }) { Text("＋行") }
+                                coroutineScope.launch { mainDataStore.setLyricsVisibleLines(2) }
+                            }, enabled = lyricsVisibleLines != 2) { Text("2排") }
                             OutlinedButton(onClick = {
-                                val newLines = (lyricsVisibleLines - 1).coerceAtLeast(1)
-                                coroutineScope.launch { mainDataStore.setLyricsVisibleLines(newLines) }
-                            }) { Text("－行") }
+                                coroutineScope.launch { mainDataStore.setLyricsVisibleLines(3) }
+                            }, enabled = lyricsVisibleLines != 3) { Text("3排") }
+                            OutlinedButton(onClick = {
+                                coroutineScope.launch { mainDataStore.setLyricsVisibleLines(5) }
+                            }, enabled = lyricsVisibleLines != 5) { Text("5排") }
                         }
                     }
 

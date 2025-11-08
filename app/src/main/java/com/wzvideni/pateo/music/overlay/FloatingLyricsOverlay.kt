@@ -252,6 +252,24 @@ private fun FloatingLyricsContent(
     val listState = rememberLazyListState()
     val density = LocalDensity.current
     val centerOffset = remember(lyricsVisibleLines) { (lyricsVisibleLines - 1) / 2 }
+    // 为了在首尾也能保持“当前句居中”，在列表前后补齐空白占位（放置在 Composable 作用域内）
+    val paddedLyricsList = remember(musicLyricsList, centerOffset) {
+        val before = List(centerOffset) { i ->
+            com.wzvideni.pateo.music.data.Lyric(
+                timeline = "",
+                millisecond = -(i + 1),
+                lyricsList = mutableListOf()
+            )
+        }
+        val after = List(centerOffset) { i ->
+            com.wzvideni.pateo.music.data.Lyric(
+                timeline = "",
+                millisecond = -(centerOffset + i + 1),
+                lyricsList = mutableListOf()
+            )
+        }
+        before + musicLyricsList + after
+    }
     val approxLyricLinePx = remember(lyricsSize, otherLyricsSize, density) {
         with(density) { kotlin.math.max(lyricsSize.toPx(), otherLyricsSize.toPx()) * 1.6f }
     }
@@ -375,15 +393,19 @@ private fun FloatingLyricsContent(
 
             }
 
-            // 平滑滚动到当前歌词附近位置（居中偏移）
+            // 平滑滚动：精确按行数锚定（不使用近似像素偏移，避免 3/5 排错乱）
             LaunchedEffect(musicLyricsIndex, lyricsVisibleLines) {
-                val startIndex = (musicLyricsIndex - centerOffset).coerceAtLeast(0)
-                val lastStart =
-                    (musicLyricsList.lastIndex - lyricsVisibleLines + 1).coerceAtLeast(0)
-                val targetIndex = startIndex.coerceAtMost(lastStart)
-                val approxRowPx = (approxLyricLinePx + approxTranslationLinePx)
-                val scrollOffsetPx = (approxRowPx * centerOffset).toInt()
-                listState.animateScrollToItem(targetIndex, scrollOffsetPx)
+                val paddedIndex = musicLyricsIndex + centerOffset
+                val isLast = musicLyricsIndex >= musicLyricsList.lastIndex && musicLyricsList.isNotEmpty()
+                val lastStart = (paddedLyricsList.lastIndex - lyricsVisibleLines + 1).coerceAtLeast(0)
+                val targetIndex = when {
+                    // 2排：最后一句固定第一排（不受 lastStart 限制）
+                    isLast && lyricsVisibleLines == 2 -> paddedIndex
+                    // 3/5排：保持精确锚定，最后一句仍顶端（第一排）以避免末尾不上报进度
+                    isLast -> (paddedIndex - centerOffset).coerceAtMost(lastStart)
+                    else -> (paddedIndex - centerOffset).coerceIn(0, lastStart)
+                }
+                listState.animateScrollToItem(targetIndex, 0)
             }
 
             LazyColumn(
@@ -394,7 +416,7 @@ private fun FloatingLyricsContent(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 itemsIndexed(
-                    items = musicLyricsList,
+                    items = paddedLyricsList,
                     key = { _, musicLyrics ->
                         val millisecond = musicLyrics.millisecond
                         val lyrics = musicLyrics.lyricsList.firstOrNull()
@@ -404,11 +426,11 @@ private fun FloatingLyricsContent(
                 ) { index, musicLyrics ->
                     val lyrics = musicLyrics.lyricsList.getOrNull(0)
                     val translation = musicLyrics.lyricsList.getOrNull(1)
-
-                    val bottomPad = if (musicLyricsIndex == index) lyricsLineSpacing else 0.dp
+                    val isCurrent = index == (musicLyricsIndex + centerOffset)
+                    val bottomPad = if (isCurrent) lyricsLineSpacing else 0.dp
                     Column(modifier = Modifier.fillMaxWidth().padding(bottom = bottomPad)) {
                         if (lyrics != null) {
-                            if (musicLyricsIndex == index) {
+                            if (isCurrent) {
                                 Text(
                                     text = lyrics,
                                     color = lyricsColor,
@@ -432,7 +454,7 @@ private fun FloatingLyricsContent(
                         }
 
                         if (translation != null) {
-                            if (musicLyricsIndex == index) {
+                            if (isCurrent) {
                                 Text(
                                     text = translation,
                                     color = translationColor,

@@ -136,10 +136,17 @@ class MainDataStore(context: Context) {
     suspend fun setTranslationWeight(weight: FontWeight) =
         updateSettings { translationWeight = weight.weight }
 
-    // 歌词可见行数
+    // 歌词可见行数（仅允许 2、3、5 排）
     val lyricsVisibleLines: Flow<Int> = safeDataStore.map { it.lyricsVisibleLines }
     suspend fun getLyricsVisibleLines(): Int = lyricsVisibleLines.first()
-    suspend fun setLyricsVisibleLines(lines: Int) = updateSettings { lyricsVisibleLines = lines }
+    suspend fun setLyricsVisibleLines(lines: Int) = updateSettings {
+        val clamped = when {
+            lines <= 2 -> 2
+            lines <= 3 -> 3
+            else -> 5
+        }
+        lyricsVisibleLines = clamped
+    }
 
     // 歌词行间距
     val lyricsLineSpacing: Flow<Dp> = safeDataStore.map { it.lyricsLineSpacing.dp }
