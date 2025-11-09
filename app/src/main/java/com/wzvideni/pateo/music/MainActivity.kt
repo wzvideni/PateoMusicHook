@@ -47,10 +47,11 @@ import androidx.compose.ui.draw.clip
 import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
 import android.content.pm.PackageManager
-import com.wzvideni.pateo.music.expansion.checkDrawOverlays
-import com.wzvideni.pateo.music.expansion.toast
+import android.widget.Toast
 import com.wzvideni.pateo.music.overlay.FloatingLyricsOverlay
-import com.wzvideni.pateo.music.ui.theme.PateoMusicHookTheme
+import com.wzvideni.pateo.music.ui.MqttConsoleWindow
+import com.wzvideni.pateo.music.ui.TaskerOutputsDebugWindow
+import com.wzvideni.pateo.music.mqtt.MqttCenter
 import kotlinx.coroutines.runBlocking
 
 class MainActivity : ComponentActivity() {
@@ -62,6 +63,8 @@ class MainActivity : ComponentActivity() {
     private var isTraccarRunning by mutableStateOf(false)
     private var isTaskerMockEnabled by mutableStateOf(true)
     private var autostartEnabled by mutableStateOf(false)
+    private var showMqttConsole by mutableStateOf(false)
+    private var showTaskerOutputsDebug by mutableStateOf(false)
 
     private var windowManager: WindowManager? = null
     private var floatingLyricsHandle: FloatingLyricsOverlay.Handle? = null
@@ -96,8 +99,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            PateoMusicHookTheme {
-                MockModeScreen(
+            MockModeScreen(
                     isMockMode = isMockMode,
                     overlayPermissionGranted = overlayPermissionGranted,
                     locationPermissionGranted = locationPermissionGranted,
@@ -112,18 +114,23 @@ class MainActivity : ComponentActivity() {
                     onOpenTraccarConsole = { startActivity(Intent(this, com.wzvideni.traccar.ui.TraccarActivity::class.java)) },
                     onToggleTaskerMock = {
                         isTaskerMockEnabled = !isTaskerMockEnabled
-                        com.wzvideni.pateo.music.tasker.LyricsTaskerEvent.allowInMockMode = isTaskerMockEnabled
-                        com.wzvideni.pateo.music.tasker.MetadataTaskerEvent.allowInMockMode = isTaskerMockEnabled
-                        toast(if (isTaskerMockEnabled) "模拟模式将触发 Tasker 事件" else "模拟模式不再触发 Tasker 事件")
-                    }
+                        val msg = if (isTaskerMockEnabled) "模拟模式将触发 Tasker 事件" else "模拟模式不再触发 Tasker 事件"
+                        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                    },
+                    onOpenMqttConsole = { showMqttConsole = true },
+                    showMqttConsole = showMqttConsole,
+                    onCloseMqttConsole = { showMqttConsole = false },
+                    onOpenTaskerOutputsDebug = { showTaskerOutputsDebug = true },
+                    showTaskerOutputsDebug = showTaskerOutputsDebug,
+                    onCloseTaskerOutputsDebug = { showTaskerOutputsDebug = false },
+                    onAutoGrantPermissions = ::autoGrantRequiredPermissions
                 )
-            }
         }
     }
 
     override fun onResume() {
         super.onResume()
-        overlayPermissionGranted = checkDrawOverlays()
+        overlayPermissionGranted = Settings.canDrawOverlays(this)
         locationPermissionGranted = ContextCompat.checkSelfPermission(
             this,
             Manifest.permission.ACCESS_FINE_LOCATION
@@ -143,13 +150,54 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    private fun runSuCommand(command: String): Boolean {
+        return runCatching {
+            val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
+            val exit = proc.waitFor()
+            exit == 0
+        }.getOrElse { false }
+    }
+
+    // Root 一键授权：悬浮窗 + 定位权限
+    private fun autoGrantRequiredPermissions() {
+        val pkg = packageName
+        val results = mutableListOf<String>()
+
+        // 悬浮窗 (SYSTEM_ALERT_WINDOW) 使用 cmd appops 允许，兼容不同 ROM
+        val overlayOk =
+            runSuCommand("cmd appops set --user 0 ${pkg} SYSTEM_ALERT_WINDOW allow") ||
+            runSuCommand("cmd appops set ${pkg} SYSTEM_ALERT_WINDOW allow") ||
+            runSuCommand("cmd appops set --user 0 ${pkg} android:system_alert_window allow") ||
+            runSuCommand("cmd appops set ${pkg} android:system_alert_window allow")
+        results += "悬浮窗权限:${if (overlayOk) "已允许" else "失败"}"
+
+        // 定位权限：授予 runtime 权限 + appops 允许
+        val fineGrant = runSuCommand("pm grant ${pkg} android.permission.ACCESS_FINE_LOCATION")
+        val coarseGrant = runSuCommand("pm grant ${pkg} android.permission.ACCESS_COARSE_LOCATION")
+        val fineOps = runSuCommand("cmd appops set --user 0 ${pkg} ACCESS_FINE_LOCATION allow") ||
+                runSuCommand("cmd appops set ${pkg} ACCESS_FINE_LOCATION allow")
+        val coarseOps = runSuCommand("cmd appops set --user 0 ${pkg} ACCESS_COARSE_LOCATION allow") ||
+                runSuCommand("cmd appops set ${pkg} ACCESS_COARSE_LOCATION allow")
+        val locOk = (fineGrant || coarseGrant) || (fineOps || coarseOps)
+        results += "定位权限:${if (locOk) "已允许" else "失败"}"
+
+        // 刷新状态
+        overlayPermissionGranted = android.provider.Settings.canDrawOverlays(this)
+        locationPermissionGranted = androidx.core.content.ContextCompat.checkSelfPermission(
+            this,
+            android.Manifest.permission.ACCESS_FINE_LOCATION
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        Toast.makeText(this, results.joinToString(" · "), Toast.LENGTH_SHORT).show()
+    }
+
     private fun attachFloatingLyrics() {
         if (!isMockMode) return
         val windowManager = windowManager ?: return
         val handle = floatingLyricsHandle ?: return
-        if (!checkDrawOverlays()) {
+        if (!Settings.canDrawOverlays(this)) {
             overlayPermissionGranted = false
-            toast("请先授予悬浮窗权限")
+            Toast.makeText(this, "请先授予悬浮窗权限", Toast.LENGTH_SHORT).show()
             return
         }
         overlayPermissionGranted = true
@@ -157,21 +205,17 @@ class MainActivity : ComponentActivity() {
             runCatching {
                 windowManager.addView(handle.view, handle.layoutParams)
                 FloatingLyricsOverlay.updateLifecycleToResumed()
-                if (!isOverlayActive) {
-                    toast("启动模拟悬浮歌词")
-                }
+                // 移除启动提示的 Toast，保持静默
                 isOverlayActive = true
             }.onFailure { e ->
-                val perm = checkDrawOverlays()
+                val perm = Settings.canDrawOverlays(this)
                 val sdk = android.os.Build.VERSION.SDK_INT
                 val type = handle.layoutParams.type
                 val flags = handle.layoutParams.flags
-                toast("启动失败：${e.javaClass.simpleName}${e.message?.let { ": $it" } ?: ""}\nperm=${perm}, sdk=${sdk}, type=${type}, flags=${flags}")
+                Toast.makeText(this, "启动失败：${e.javaClass.simpleName}${e.message?.let { ": $it" } ?: ""}\nperm=${perm}, sdk=${sdk}, type=${type}, flags=${flags}", Toast.LENGTH_SHORT).show()
             }
         } else {
-            if (!isOverlayActive) {
-                toast("启动模拟悬浮歌词")
-            }
+            // 移除重复激活时的 Toast，保持静默
             isOverlayActive = true
         }
     }
@@ -183,7 +227,7 @@ class MainActivity : ComponentActivity() {
         if (handle.view.parent != null) {
             windowManager.removeViewImmediate(handle.view)
             FloatingLyricsOverlay.updateLifecycleToDestroyed()
-            toast("关闭模拟悬浮歌词")
+            // 移除关闭提示的 Toast，保持静默
         }
         isOverlayActive = false
     }
@@ -226,12 +270,18 @@ private fun MockModeScreen(
     onStopOverlay: () -> Unit,
     onOpenTraccarConsole: () -> Unit,
     onToggleTaskerMock: () -> Unit,
+    onOpenMqttConsole: () -> Unit,
+    showMqttConsole: Boolean,
+    onCloseMqttConsole: () -> Unit,
+    onOpenTaskerOutputsDebug: () -> Unit,
+    showTaskerOutputsDebug: Boolean,
+    onCloseTaskerOutputsDebug: () -> Unit,
+    onAutoGrantPermissions: () -> Unit,
 ) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(24.dp)
     ) {
         if (!isMockMode) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -241,115 +291,138 @@ private fun MockModeScreen(
                     textAlign = TextAlign.Center
                 )
             }
-            return
+        } else {
+            // 2x2 网格，卡片居中且不占满全屏
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally)) {
+                    GridBlock(
+                        modifier = Modifier.width(520.dp).heightIn(min = 320.dp, max = 320.dp),
+                        title = "打开权限",
+                        statusActive = overlayPermissionGranted && locationPermissionGranted,
+                        description = "授予悬浮窗与定位权限，确保界面与位置服务正常",
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            ButtonWithStatusDot(
+                                text = "悬浮窗权限",
+                                onClick = onRequestOverlayPermission,
+                                active = overlayPermissionGranted
+                            )
+                            ButtonWithStatusDot(
+                                text = "定位权限",
+                                onClick = onOpenLocationPermissionSettings,
+                                active = locationPermissionGranted
+                            )
+                            ButtonWithStatusDot(
+                                text = "一键开启",
+                                onClick = onAutoGrantPermissions,
+                                active = overlayPermissionGranted && locationPermissionGranted
+                            )
+                        }
+                    }
+
+                    GridBlock(
+                        modifier = Modifier.width(520.dp).heightIn(min = 320.dp, max = 320.dp),
+                        title = "触发 Tasker 事件",
+                        statusActive = taskerMockEnabled,
+                        description = "",
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            ButtonWithStatusDot(
+                                text = "切换开关",
+                                onClick = onToggleTaskerMock,
+                                active = taskerMockEnabled
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                StatusDot(active = taskerMockEnabled)
+                                Text(text = "LYRICS_CHANGED（歌词事件）跟随开关启用", style = MaterialTheme.typography.bodySmall)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                StatusDot(active = taskerMockEnabled)
+                                Text(text = "SONGINFO_CHANGED（歌曲信息事件）跟随开关启用", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.size(24.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally)) {
+                    GridBlock(
+                        modifier = Modifier.width(520.dp).heightIn(min = 320.dp, max = 320.dp),
+                        title = "软件工具",
+                        statusActive = isTraccarRunning || autostartEnabled,
+                        description = "包含 traccar 跟踪控制台、MQTT 接收控制台与开机自启动设置",
+                    ) {
+                        val ctx = LocalContext.current
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            ButtonWithStatusDot(
+                                text = "TRACCAR跟踪控制台",
+                                onClick = onOpenTraccarConsole,
+                                active = isTraccarRunning
+                            )
+                            ButtonWithStatusDot(
+                                text = "MQTT接收控制台",
+                                onClick = onOpenMqttConsole,
+                                active = (MqttCenter.manager.connectionState.value == com.wzvideni.pateo.music.mqtt.ConnectionState.CONNECTED)
+                            )
+                            ButtonWithStatusDot(
+                                text = "开机自启动设置",
+                                onClick = { ctx.startActivity(Intent(ctx, com.wzvideni.pateo.music.autostart.AutoStartSettingsActivity::class.java)) },
+                                active = autostartEnabled
+                            )
+                        }
+                    }
+
+                    GridBlock(
+                        modifier = Modifier.width(520.dp).heightIn(min = 320.dp, max = 320.dp),
+                        title = "调试",
+                        statusActive = isOverlayActive,
+                        description = "模拟悬浮歌词用于调试",
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Button(
+                                onClick = { if (!isOverlayActive) onStartOverlay() else onStopOverlay() },
+                                enabled = overlayPermissionGranted,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (!isOverlayActive)
+                                        MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (!isOverlayActive)
+                                        MaterialTheme.colorScheme.onPrimary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            ) { Text(text = if (!isOverlayActive) "启动模拟悬浮歌词" else "关闭模拟悬浮歌词") }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            StatusDot(active = isOverlayActive)
+                        }
+                        Spacer(modifier = Modifier.size(12.dp))
+                        ButtonWithStatusDot(
+                            text = "Tasker 输出变量调试",
+                            onClick = onOpenTaskerOutputsDebug,
+                            active = showTaskerOutputsDebug
+                        )
+                        if (isOverlayActive) {
+                            Text(
+                                text = "模拟悬浮歌词已启动，可切换应用查看显示效果。",
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+            }
         }
 
-        // 2x2 网格，卡片居中且不占满全屏
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally)) {
-                GridBlock(
-                    modifier = Modifier.width(520.dp).heightIn(min = 320.dp, max = 320.dp),
-                    title = "打开权限",
-                    statusActive = overlayPermissionGranted && locationPermissionGranted,
-                    description = "授予悬浮窗与定位权限，确保界面与位置服务正常",
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        ButtonWithStatusDot(
-                            text = "悬浮窗权限",
-                            onClick = onRequestOverlayPermission,
-                            active = overlayPermissionGranted
-                        )
-                        ButtonWithStatusDot(
-                            text = "定位权限",
-                            onClick = onOpenLocationPermissionSettings,
-                            active = locationPermissionGranted
-                        )
-                    }
-                }
-
-                GridBlock(
-                    modifier = Modifier.width(520.dp).heightIn(min = 320.dp, max = 320.dp),
-                    title = "触发 Tasker 事件",
-                    statusActive = taskerMockEnabled,
-                    description = "默认开启。\n\n动作（Action）：\n- 歌词事件： com.wzvideni.pateo.music.LYRICS_CHANGED\n- 歌曲信息事件： com.wzvideni.pateo.music.SONGINFO_CHANGED\n\nSONGINFO_CHANGED 提供的变量：\n- %singer_name ：歌手名\n- %song_name ：歌名\n- %album_name ：专辑名\n- %album_pic ：专辑封面 URL\n\nLYRICS_CHANGED 提供的变量：\n- %lyric_text ：当前歌词文本（与 %lyric_current 相同，保留兼容）\n- %lyric_current ：当前行歌词文本\n- %lyric_second ：翻译/第二行歌词（可能不存在）",
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        ButtonWithStatusDot(
-                            text = "切换开关",
-                            onClick = onToggleTaskerMock,
-                            active = taskerMockEnabled
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            StatusDot(active = taskerMockEnabled)
-                            Text(text = "LYRICS_CHANGED（歌词事件）跟随开关启用", style = MaterialTheme.typography.bodySmall)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            StatusDot(active = taskerMockEnabled)
-                            Text(text = "SONGINFO_CHANGED（歌曲信息事件）跟随开关启用", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.size(24.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally)) {
-                GridBlock(
-                    modifier = Modifier.width(520.dp).heightIn(min = 320.dp, max = 320.dp),
-                    title = "位置跟踪与自启",
-                    statusActive = isTraccarRunning || autostartEnabled,
-                    description = "Traccar 位置服务与开机自启动",
-                ) {
-                    val ctx = LocalContext.current
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        ButtonWithStatusDot(
-                            text = "打开位置跟踪控制台",
-                            onClick = onOpenTraccarConsole,
-                            active = isTraccarRunning
-                        )
-                        ButtonWithStatusDot(
-                            text = "开机自启动设置",
-                            onClick = { ctx.startActivity(Intent(ctx, com.wzvideni.pateo.music.autostart.AutoStartSettingsActivity::class.java)) },
-                            active = autostartEnabled
-                        )
-                    }
-                }
-
-                GridBlock(
-                    modifier = Modifier.width(520.dp).heightIn(min = 320.dp, max = 320.dp),
-                    title = "调试",
-                    statusActive = isOverlayActive,
-                    description = "模拟悬浮歌词用于调试，1920×1080 适配",
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Button(
-                            onClick = { if (!isOverlayActive) onStartOverlay() else onStopOverlay() },
-                            enabled = overlayPermissionGranted,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (!isOverlayActive)
-                                    MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (!isOverlayActive)
-                                    MaterialTheme.colorScheme.onPrimary
-                                else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        ) { Text(text = if (!isOverlayActive) "启动模拟悬浮歌词" else "关闭模拟悬浮歌词") }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        StatusDot(active = isOverlayActive)
-                    }
-                    if (isOverlayActive) {
-                        Text(
-                            text = "模拟悬浮歌词已启动，可切换应用查看显示效果。",
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-            }
+        // 顶层覆盖渲染控制台
+        if (showMqttConsole) {
+            MqttConsoleWindow(onClose = onCloseMqttConsole)
+        }
+        if (showTaskerOutputsDebug) {
+            TaskerOutputsDebugWindow(onClose = onCloseTaskerOutputsDebug)
         }
     }
 }
@@ -376,7 +449,8 @@ private fun GridBlock(
 ) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Column(
             modifier = Modifier
@@ -398,7 +472,7 @@ private fun GridBlock(
 private fun ButtonWithStatusDot(text: String, onClick: () -> Unit, active: Boolean) {
     val space: Dp = with(LocalDensity.current) { 4f.toDp() }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Button(onClick = onClick) { Text(text = text) }
+        Button(onClick = onClick, colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) { Text(text = text) }
         Spacer(modifier = Modifier.width(space))
         StatusDot(active = active)
     }

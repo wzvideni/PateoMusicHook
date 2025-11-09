@@ -1,6 +1,7 @@
 package com.wzvideni.pateo.music.lifecycle
 
 import android.util.Log
+import com.wzvideni.pateo.music.BuildConfig
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -32,7 +33,7 @@ object FloatingWindowLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner {
         savedStateRegistryController.performAttach() // 绑定
         savedStateRegistryController.performRestore(null) // 可选：恢复状态
 
-        Log.d("FloatingWindowLifecycleOwner", "INITIALIZED")
+        if (BuildConfig.DEBUG) Log.d("FloatingWindowLifecycleOwner", "INITIALIZED")
     }
 
     override val lifecycle: Lifecycle
@@ -43,6 +44,6 @@ object FloatingWindowLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner {
 
     fun updateLifecycleState(state: Lifecycle.State) {
         lifecycleRegistry.currentState = state
-        Log.d("FloatingWindowLifecycleOwner", "$state")
+        if (BuildConfig.DEBUG) Log.d("FloatingWindowLifecycleOwner", "$state")
     }
 }

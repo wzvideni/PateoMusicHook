@@ -102,9 +102,13 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:5.2.1")
     implementation("com.squareup.okhttp3:logging-interceptor:5.2.1")
 
+    // MQTT (Eclipse Paho MQTT v3 client)
+    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
+
     // Protocol Buffers
     implementation("com.google.protobuf:protobuf-kotlin:4.32.1")
     implementation("androidx.datastore:datastore:1.1.7")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.9.3")

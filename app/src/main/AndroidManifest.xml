@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -111,33 +113,33 @@
                 android:value="true" />
         </activity>
 
-        <!-- Tasker 插件 Action 配置页面：输出歌词 -->
+        <!-- Tasker 插件事件配置页面：MQTT 消息接收事件 -->
         <activity
-            android:name=".tasker.LyricsActionConfigActivity"
+            android:name=".tasker.MqttEventConfigActivity"
             android:exported="true"
-            android:label="Output Lyrics"
+            android:label="MQTT Message Received"
             android:screenOrientation="behind">
             <intent-filter>
-                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
+                <action android:name="net.dinglisch.android.tasker.ACTION_EDIT_EVENT" />
             </intent-filter>
             <meta-data
-                android:name="tasker-plugin-action"
+                android:name="tasker-plugin-event"
                 android:value="true" />
         </activity>
 
-        <!-- Tasker 插件 Action 配置页面：输出歌曲信息 -->
-        <activity
-            android:name=".tasker.MetadataActionConfigActivity"
-            android:exported="true"
-            android:label="Output Song Info"
-            android:screenOrientation="behind">
+        <!-- 事件广播回填接收器：用于在应用进程内同步 HookState 到调试窗口 -->
+        <receiver
+            android:name=".tasker.TaskerEventEchoReceiver"
+            android:enabled="true"
+            android:exported="true">
             <intent-filter>
-                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
+                <action android:name="com.wzvideni.pateo.music.LYRICS_CHANGED" />
+                <action android:name="com.wzvideni.pateo.music.SONGINFO_CHANGED" />
+                <action android:name="com.wzvideni.pateo.music.MQTT_MESSAGE_RECEIVED" />
             </intent-filter>
-            <meta-data
-                android:name="tasker-plugin-action"
-                android:value="true" />
-        </activity>
+        </receiver>
+
+        
     </application>
 
 </manifest>
