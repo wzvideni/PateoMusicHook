@@ -314,6 +314,10 @@ private fun FloatingLyricsContent(
                     if (i == musicLyricsIndex) transCurrentPx else transOtherPx
                 } else 0f)
 
+            // 当前句在 3/5 排时，上下都增加行间距：上方行距在可见区域内且非首行时生效
+            if (i == musicLyricsIndex && lyricsVisibleLines != 2 && rowsAccum > 0) {
+                heightPx += spacingPx
+            }
             heightPx += rowHeight
             if (i == musicLyricsIndex && rowsAccum < lyricsVisibleLines - 1) {
                 heightPx += spacingPx
@@ -427,8 +431,9 @@ private fun FloatingLyricsContent(
                     val lyrics = musicLyrics.lyricsList.getOrNull(0)
                     val translation = musicLyrics.lyricsList.getOrNull(1)
                     val isCurrent = index == (musicLyricsIndex + centerOffset)
+                    val topPad = if (isCurrent && lyricsVisibleLines != 2) lyricsLineSpacing else 0.dp
                     val bottomPad = if (isCurrent) lyricsLineSpacing else 0.dp
-                    Column(modifier = Modifier.fillMaxWidth().padding(bottom = bottomPad)) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(top = topPad, bottom = bottomPad)) {
                         if (lyrics != null) {
                             if (isCurrent) {
                                 Text(

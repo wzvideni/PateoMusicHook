@@ -148,8 +148,6 @@ dependencies {
     // Optional: BetterAndroid (https://github.com/BetterAndroid/BetterAndroid)
     implementation("com.highcapable.betterandroid:system-extension:1.0.3")
 
-    // Tasker Plugin Library (for Tasker event integration)
-    implementation("com.joaomgcd:taskerpluginlibrary:0.4.10")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")

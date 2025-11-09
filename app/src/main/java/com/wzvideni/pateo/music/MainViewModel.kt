@@ -7,6 +7,7 @@ import com.highcapable.yukihookapi.hook.log.YLog
 import com.wzvideni.pateo.music.data.Lyric
 import com.wzvideni.pateo.music.data.qqMusicLyricRequest
 import com.wzvideni.pateo.music.expansion.set
+import com.wzvideni.pateo.music.broadcast.BroadcastSender
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,9 +30,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setSongName(songName: String?) {
         if (_songName.value == songName) return
         _songName.set(songName)
-        com.wzvideni.pateo.music.tasker.HookState.title = songName
-        com.wzvideni.pateo.music.tasker.HookState.timestamp = System.currentTimeMillis()
-        onMetadataFieldChanged()
+        maybeBroadcastMetadata()
     }
 
     private val _singerName: MutableStateFlow<String?> = MutableStateFlow(null)
@@ -39,9 +38,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setSingerName(singerName: String?) {
         if (_singerName.value == singerName) return
         _singerName.set(singerName)
-        com.wzvideni.pateo.music.tasker.HookState.artist = singerName
-        com.wzvideni.pateo.music.tasker.HookState.timestamp = System.currentTimeMillis()
-        onMetadataFieldChanged()
+        maybeBroadcastMetadata()
     }
 
     // 专辑名
@@ -50,9 +47,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setAlbumName(albumName: String?) {
         if (_albumName.value == albumName) return
         _albumName.set(albumName)
-        com.wzvideni.pateo.music.tasker.HookState.album = albumName
-        com.wzvideni.pateo.music.tasker.HookState.timestamp = System.currentTimeMillis()
-        onMetadataFieldChanged()
+        maybeBroadcastMetadata()
     }
 
     // 专辑图片
@@ -61,19 +56,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setAlbumPic(albumPic: String?) {
         if (_albumPic.value == albumPic) return
         _albumPic.set(albumPic)
-        com.wzvideni.pateo.music.tasker.HookState.albumPic = albumPic
-        com.wzvideni.pateo.music.tasker.HookState.timestamp = System.currentTimeMillis()
-        onMetadataFieldChanged()
+        maybeBroadcastMetadata()
     }
 
     // 音乐播放位置
     private val _musicPlayingPosition: MutableStateFlow<Long> = MutableStateFlow(0L)
     val musicPlayingPosition: StateFlow<Long> = _musicPlayingPosition
     fun setMusicPlayingPosition(value: Long) = _musicPlayingPosition.set(value)
-        .also {
-            com.wzvideni.pateo.music.tasker.HookState.positionMs = value
-            com.wzvideni.pateo.music.tasker.HookState.timestamp = System.currentTimeMillis()
-        }
+        .also { }
 
     // 音乐歌词
     private val _musicLyrics: MutableStateFlow<String> = MutableStateFlow("")
@@ -90,27 +80,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val musicLyricsIndex: StateFlow<Int> = _musicLyricsIndex
     fun setMusicLyricsIndex(value: Int) {
         _musicLyricsIndex.set(value)
-        // 当歌词索引更新时，触发 Tasker 事件用于外部自动化
-        // 仅取原歌词（索引 0），不包含翻译
-        val currentLyricText = _musicLyricsList.value.getOrNull(value)?.lyricsList?.getOrNull(0)
-        // 查找下一句原歌词（向后查找第一个存在索引 0 的条目），不包含翻译
-        val secondLyricText = run {
-            val list = _musicLyricsList.value
-            var j = value + 1
-            var next: String? = null
-            while (j < list.size && next == null) {
-                next = list.getOrNull(j)?.lyricsList?.getOrNull(0)
-                j++
-            }
-            next
-        }
-        // 更新 HookState，供 Action 直接读取
-        com.wzvideni.pateo.music.tasker.HookState.lyric = currentLyricText
-        com.wzvideni.pateo.music.tasker.HookState.nextLyric = secondLyricText
-        com.wzvideni.pateo.music.tasker.HookState.index = value
-        com.wzvideni.pateo.music.tasker.HookState.timestamp = System.currentTimeMillis()
-
-        com.wzvideni.pateo.music.tasker.LyricsTaskerEvent.trigger(getApplication(), currentLyricText, secondLyricText, value)
+        maybeBroadcastLyrics(value)
     }
 
     // 音乐歌词列表
@@ -132,26 +102,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // 元数据变化合并与去重：短延迟后统一输出一次，避免连续四次 setter 触发四次广播
-    private var metadataChanged: Boolean = false
-    private var metadataDebounceJob: Job? = null
-    private fun onMetadataFieldChanged() {
-        metadataChanged = true
-        metadataDebounceJob?.cancel()
-        metadataDebounceJob = viewModelScope.launch {
-            delay(80)
-            if (metadataChanged) {
-                metadataChanged = false
-                com.wzvideni.pateo.music.tasker.MetadataTaskerEvent.trigger(
-                    getApplication(),
-                    _singerName.value,
-                    _songName.value,
-                    _albumName.value,
-                    _albumPic.value,
-                )
-            }
-        }
-    }
+    // 移除 Tasker 元数据广播逻辑
 
 
     suspend fun qqMusicSearch(songMid: String?) {
@@ -218,5 +169,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // 也可按需改为返回最后一句。为兼容现有行为，这里沿用返回第一句。
         setMusicLyricsIndex(0)
         return null
+    }
+
+    private fun maybeBroadcastLyrics(index: Int) {
+        val lyricsList = _musicLyricsList.value
+        if (lyricsList.isEmpty()) return
+        // 仅取原文，不取翻译（构建逻辑为原文在列表首位，翻译为随后元素）
+        val current = lyricsList.getOrNull(index)?.lyricsList?.firstOrNull() ?: ""
+        val next = lyricsList.getOrNull(index + 1)?.lyricsList?.firstOrNull() ?: ""
+        val pkg = getApplication<Application>().packageName
+        val overlayEnabled = BroadcastSender.isOverlayMockEnabled()
+        // 模块 App：仅在模拟悬浮歌词开启时广播模拟歌词
+        if (pkg == "com.wzvideni.pateo.music") {
+            if (overlayEnabled) {
+                BroadcastSender.sendLyrics(getApplication(), current, next)
+            }
+            return
+        }
+        // hook 端：仅在未开启模拟悬浮歌词时广播真实歌词
+        if (!overlayEnabled) {
+            BroadcastSender.sendLyrics(getApplication(), current, next)
+        }
+    }
+
+    private fun maybeBroadcastMetadata() {
+        val pkg = getApplication<Application>().packageName
+        val overlayEnabled = BroadcastSender.isOverlayMockEnabled()
+        // 仅模块 App 在开启模拟悬浮歌词时广播元数据；hook 端的元数据广播在 MainHookEntry 中处理
+        if (pkg == "com.wzvideni.pateo.music" && overlayEnabled) {
+            BroadcastSender.sendMetadata(
+                getApplication(),
+                _singerName.value,
+                _songName.value,
+                _albumName.value,
+                _albumPic.value
+            )
+        }
     }
 }

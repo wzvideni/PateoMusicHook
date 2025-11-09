@@ -86,58 +86,15 @@
             android:screenOrientation="behind" />
 
         <!-- Tasker 插件事件配置页面：歌词变化事件 -->
-        <activity
-            android:name=".tasker.LyricsEventConfigActivity"
-            android:exported="true"
-            android:label="Lyrics Changed"
-            android:screenOrientation="behind">
-            <intent-filter>
-                <action android:name="net.dinglisch.android.tasker.ACTION_EDIT_EVENT" />
-            </intent-filter>
-            <meta-data
-                android:name="tasker-plugin-event"
-                android:value="true" />
-        </activity>
+        
 
         <!-- Tasker 插件事件配置页面：歌曲信息变化事件 -->
-        <activity
-            android:name=".tasker.MetadataEventConfigActivity"
-            android:exported="true"
-            android:label="Song Info Changed"
-            android:screenOrientation="behind">
-            <intent-filter>
-                <action android:name="net.dinglisch.android.tasker.ACTION_EDIT_EVENT" />
-            </intent-filter>
-            <meta-data
-                android:name="tasker-plugin-event"
-                android:value="true" />
-        </activity>
+        
 
         <!-- Tasker 插件事件配置页面：MQTT 消息接收事件 -->
-        <activity
-            android:name=".tasker.MqttEventConfigActivity"
-            android:exported="true"
-            android:label="MQTT Message Received"
-            android:screenOrientation="behind">
-            <intent-filter>
-                <action android:name="net.dinglisch.android.tasker.ACTION_EDIT_EVENT" />
-            </intent-filter>
-            <meta-data
-                android:name="tasker-plugin-event"
-                android:value="true" />
-        </activity>
+        
 
-        <!-- 事件广播回填接收器：用于在应用进程内同步 HookState 到调试窗口 -->
-        <receiver
-            android:name=".tasker.TaskerEventEchoReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.wzvideni.pateo.music.LYRICS_CHANGED" />
-                <action android:name="com.wzvideni.pateo.music.SONGINFO_CHANGED" />
-                <action android:name="com.wzvideni.pateo.music.MQTT_MESSAGE_RECEIVED" />
-            </intent-filter>
-        </receiver>
+        
 
         
     </application>

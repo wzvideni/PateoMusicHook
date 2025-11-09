@@ -1,6 +1,8 @@
 package com.wzvideni.pateo.music
 
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.content.Context.WINDOW_SERVICE
 import android.view.WindowManager
 import com.highcapable.betterandroid.system.extension.tool.AndroidVersion
@@ -14,6 +16,7 @@ import com.highcapable.yukihookapi.hook.xposed.proxy.IYukiHookXposedInit
 import com.wzvideni.pateo.music.expansion.checkDrawOverlays
 import com.wzvideni.pateo.music.expansion.getValueOf
 import com.wzvideni.pateo.music.expansion.toast
+import com.wzvideni.pateo.music.broadcast.BroadcastSender
 import com.wzvideni.pateo.music.overlay.FloatingLyricsOverlay
 import kotlinx.coroutines.runBlocking
 
@@ -80,6 +83,17 @@ class MainHookEntry : IYukiHookXposedInit {
                         initialPosition = initialPosition
                     )
                     addFloatingComposeView(this)
+
+                    // 监听来自模块 App 的模拟悬浮歌词状态广播，用于在 hook 端决定是否发送歌词/元数据广播
+                    val receiver = object : BroadcastReceiver() {
+                        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+                            if (intent?.action == BroadcastSender.ACTION_OVERLAY_STATUS) {
+                                val enabled = intent.getBooleanExtra("enabled", false)
+                                BroadcastSender.updateOverlayStatus(enabled)
+                            }
+                        }
+                    }
+                    registerReceiver(receiver, IntentFilter(BroadcastSender.ACTION_OVERLAY_STATUS))
                 }
             }
 
@@ -105,6 +119,17 @@ class MainHookEntry : IYukiHookXposedInit {
                             mainViewModel.setAlbumName(albumName)
                             mainViewModel.setAlbumPic(albumPic)
 
+                            // 在 hook 端发送元数据广播（若未启用模拟悬浮歌词）
+                            if (!BroadcastSender.isOverlayMockEnabled()) {
+                                BroadcastSender.sendMetadata(
+                                    application,
+                                    singerName,
+                                    songName,
+                                    albumName,
+                                    albumPic
+                                )
+                            }
+
                             YLog.debug("songId: $songId")
                             YLog.debug("songMid: $songMid")
 
@@ -123,12 +148,9 @@ class MainHookEntry : IYukiHookXposedInit {
                             mainViewModel.setMusicPlayingPosition(
                                 currentTime.toString().toLongOrNull() ?: 0
                             )
-                            // 同步总时长到 HookState，供 Action 读取
-                            com.wzvideni.pateo.music.tasker.HookState.durationMs =
-                                totalTime.toString().toLongOrNull()
-                            com.wzvideni.pateo.music.tasker.HookState.timestamp = System.currentTimeMillis()
                             YLog.debug("onProgressChanged: $currentTime/$totalTime")
 //                            application.toast("onProgressChanged: $currentTime/$totalTime")
+                            // 歌词广播由 ViewModel 的歌词索引更新逻辑触发，这里无需重复发送
                         }
                     }
                 }

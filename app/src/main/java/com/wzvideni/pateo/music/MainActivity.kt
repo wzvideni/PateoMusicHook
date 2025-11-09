@@ -48,9 +48,10 @@ import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
 import android.content.pm.PackageManager
 import android.widget.Toast
+import com.wzvideni.pateo.music.broadcast.BroadcastSender
 import com.wzvideni.pateo.music.overlay.FloatingLyricsOverlay
 import com.wzvideni.pateo.music.ui.MqttConsoleWindow
-import com.wzvideni.pateo.music.ui.TaskerOutputsDebugWindow
+import com.wzvideni.pateo.music.ui.TaskerInfoWindow
 import com.wzvideni.pateo.music.mqtt.MqttCenter
 import kotlinx.coroutines.runBlocking
 
@@ -61,15 +62,15 @@ class MainActivity : ComponentActivity() {
     private var locationPermissionGranted by mutableStateOf(false)
     private var isOverlayActive by mutableStateOf(false)
     private var isTraccarRunning by mutableStateOf(false)
-    private var isTaskerMockEnabled by mutableStateOf(true)
     private var autostartEnabled by mutableStateOf(false)
     private var showMqttConsole by mutableStateOf(false)
-    private var showTaskerOutputsDebug by mutableStateOf(false)
+    private var showTaskerInfo by mutableStateOf(false)
 
     private var windowManager: WindowManager? = null
     private var floatingLyricsHandle: FloatingLyricsOverlay.Handle? = null
     private var mainViewModel: MainViewModel? = null
     private var mainDataStore: MainDataStore? = null
+    private var debugMirrorReceiver: android.content.BroadcastReceiver? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -106,26 +107,23 @@ class MainActivity : ComponentActivity() {
                     isOverlayActive = isOverlayActive,
                     isTraccarRunning = isTraccarRunning,
                     autostartEnabled = autostartEnabled,
-                    taskerMockEnabled = isTaskerMockEnabled,
                     onRequestOverlayPermission = ::openOverlaySettings,
                     onOpenLocationPermissionSettings = ::openLocationPermissionSettings,
                     onStartOverlay = ::attachFloatingLyrics,
                     onStopOverlay = ::detachFloatingLyrics,
                     onOpenTraccarConsole = { startActivity(Intent(this, com.wzvideni.traccar.ui.TraccarActivity::class.java)) },
-                    onToggleTaskerMock = {
-                        isTaskerMockEnabled = !isTaskerMockEnabled
-                        val msg = if (isTaskerMockEnabled) "模拟模式将触发 Tasker 事件" else "模拟模式不再触发 Tasker 事件"
-                        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-                    },
                     onOpenMqttConsole = { showMqttConsole = true },
+                    onOpenTaskerInfo = { showTaskerInfo = true },
                     showMqttConsole = showMqttConsole,
                     onCloseMqttConsole = { showMqttConsole = false },
-                    onOpenTaskerOutputsDebug = { showTaskerOutputsDebug = true },
-                    showTaskerOutputsDebug = showTaskerOutputsDebug,
-                    onCloseTaskerOutputsDebug = { showTaskerOutputsDebug = false },
+                    showTaskerInfo = showTaskerInfo,
+                    onCloseTaskerInfo = { showTaskerInfo = false },
                     onAutoGrantPermissions = ::autoGrantRequiredPermissions
                 )
         }
+
+        // 注册内部镜像广播接收器：当 hook 端发送歌词/元数据时，同步更新本应用的变量调试 UI
+        debugMirrorReceiver = BroadcastSender.registerDebugMirrorReceiver(this)
     }
 
     override fun onResume() {
@@ -140,13 +138,14 @@ class MainActivity : ComponentActivity() {
         autostartEnabled = runCatching {
             getSharedPreferences("autostart_prefs", MODE_PRIVATE).getBoolean("enabled", false)
         }.getOrElse { false }
-        com.wzvideni.pateo.music.tasker.LyricsTaskerEvent.allowInMockMode = isTaskerMockEnabled
-        com.wzvideni.pateo.music.tasker.MetadataTaskerEvent.allowInMockMode = isTaskerMockEnabled
         // 默认不自动启动模拟悬浮歌词，保持关闭状态，需手动点击按钮启动
     }
 
     override fun onDestroy() {
         detachFloatingLyrics()
+        // 释放内部镜像广播接收器
+        BroadcastSender.unregisterDebugMirrorReceiver(this, debugMirrorReceiver)
+        debugMirrorReceiver = null
         super.onDestroy()
     }
 
@@ -207,6 +206,9 @@ class MainActivity : ComponentActivity() {
                 FloatingLyricsOverlay.updateLifecycleToResumed()
                 // 移除启动提示的 Toast，保持静默
                 isOverlayActive = true
+                // 广播：标记模拟悬浮歌词已启用，通知 hook 端关闭数据广播
+                BroadcastSender.updateOverlayStatus(true)
+                BroadcastSender.sendOverlayStatus(this, true)
             }.onFailure { e ->
                 val perm = Settings.canDrawOverlays(this)
                 val sdk = android.os.Build.VERSION.SDK_INT
@@ -217,6 +219,8 @@ class MainActivity : ComponentActivity() {
         } else {
             // 移除重复激活时的 Toast，保持静默
             isOverlayActive = true
+            BroadcastSender.updateOverlayStatus(true)
+            BroadcastSender.sendOverlayStatus(this, true)
         }
     }
 
@@ -230,6 +234,9 @@ class MainActivity : ComponentActivity() {
             // 移除关闭提示的 Toast，保持静默
         }
         isOverlayActive = false
+        // 广播：标记模拟悬浮歌词已关闭，允许 hook 端恢复广播
+        BroadcastSender.updateOverlayStatus(false)
+        BroadcastSender.sendOverlayStatus(this, false)
     }
 
     private fun openOverlaySettings() {
@@ -263,19 +270,17 @@ private fun MockModeScreen(
     isOverlayActive: Boolean,
     isTraccarRunning: Boolean,
     autostartEnabled: Boolean,
-    taskerMockEnabled: Boolean,
     onRequestOverlayPermission: () -> Unit,
     onOpenLocationPermissionSettings: () -> Unit,
     onStartOverlay: () -> Unit,
     onStopOverlay: () -> Unit,
     onOpenTraccarConsole: () -> Unit,
-    onToggleTaskerMock: () -> Unit,
     onOpenMqttConsole: () -> Unit,
+    onOpenTaskerInfo: () -> Unit,
     showMqttConsole: Boolean,
     onCloseMqttConsole: () -> Unit,
-    onOpenTaskerOutputsDebug: () -> Unit,
-    showTaskerOutputsDebug: Boolean,
-    onCloseTaskerOutputsDebug: () -> Unit,
+    showTaskerInfo: Boolean,
+    onCloseTaskerInfo: () -> Unit,
     onAutoGrantPermissions: () -> Unit,
 ) {
     Box(
@@ -326,24 +331,16 @@ private fun MockModeScreen(
 
                     GridBlock(
                         modifier = Modifier.width(520.dp).heightIn(min = 320.dp, max = 320.dp),
-                        title = "触发 Tasker 事件",
-                        statusActive = taskerMockEnabled,
-                        description = "",
+                        title = "Tasker变量信息",
+                        statusActive = showTaskerInfo,
+                        description = "查看歌词/元数据/MQTT 广播地址与变量说明，支持复制",
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             ButtonWithStatusDot(
-                                text = "切换开关",
-                                onClick = onToggleTaskerMock,
-                                active = taskerMockEnabled
+                                text = if (showTaskerInfo) "关闭Tasker变量信息" else "开启Tasker变量信息",
+                                onClick = { if (showTaskerInfo) onCloseTaskerInfo() else onOpenTaskerInfo() },
+                                active = showTaskerInfo
                             )
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                StatusDot(active = taskerMockEnabled)
-                                Text(text = "LYRICS_CHANGED（歌词事件）跟随开关启用", style = MaterialTheme.typography.bodySmall)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                StatusDot(active = taskerMockEnabled)
-                                Text(text = "SONGINFO_CHANGED（歌曲信息事件）跟随开关启用", style = MaterialTheme.typography.bodySmall)
-                            }
                         }
                     }
                 }
@@ -400,11 +397,6 @@ private fun MockModeScreen(
                             StatusDot(active = isOverlayActive)
                         }
                         Spacer(modifier = Modifier.size(12.dp))
-                        ButtonWithStatusDot(
-                            text = "Tasker 输出变量调试",
-                            onClick = onOpenTaskerOutputsDebug,
-                            active = showTaskerOutputsDebug
-                        )
                         if (isOverlayActive) {
                             Text(
                                 text = "模拟悬浮歌词已启动，可切换应用查看显示效果。",
@@ -421,8 +413,8 @@ private fun MockModeScreen(
         if (showMqttConsole) {
             MqttConsoleWindow(onClose = onCloseMqttConsole)
         }
-        if (showTaskerOutputsDebug) {
-            TaskerOutputsDebugWindow(onClose = onCloseTaskerOutputsDebug)
+        if (showTaskerInfo) {
+            TaskerInfoWindow(onClose = onCloseTaskerInfo)
         }
     }
 }
