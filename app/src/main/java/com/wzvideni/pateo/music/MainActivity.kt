@@ -1,7 +1,7 @@
 package com.wzvideni.pateo.music
 
-import android.Manifest
 import android.content.Intent
+import android.Manifest
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -11,13 +11,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -25,18 +25,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -49,6 +47,7 @@ import androidx.preference.PreferenceManager
 import android.content.pm.PackageManager
 import android.widget.Toast
 import com.wzvideni.pateo.music.broadcast.BroadcastSender
+import androidx.compose.ui.graphics.Color
 import com.wzvideni.pateo.music.overlay.FloatingLyricsOverlay
 import com.wzvideni.pateo.music.ui.MqttConsoleWindow
 import com.wzvideni.pateo.music.ui.TaskerInfoWindow
@@ -59,12 +58,12 @@ class MainActivity : ComponentActivity() {
 
     private var isMockMode: Boolean = false
     private var overlayPermissionGranted by mutableStateOf(false)
-    private var locationPermissionGranted by mutableStateOf(false)
     private var isOverlayActive by mutableStateOf(false)
     private var isTraccarRunning by mutableStateOf(false)
     private var autostartEnabled by mutableStateOf(false)
     private var showMqttConsole by mutableStateOf(false)
     private var showTaskerInfo by mutableStateOf(false)
+    private var locationPermissionGranted by mutableStateOf(false)
 
     private var windowManager: WindowManager? = null
     private var floatingLyricsHandle: FloatingLyricsOverlay.Handle? = null
@@ -103,12 +102,11 @@ class MainActivity : ComponentActivity() {
             MockModeScreen(
                     isMockMode = isMockMode,
                     overlayPermissionGranted = overlayPermissionGranted,
-                    locationPermissionGranted = locationPermissionGranted,
                     isOverlayActive = isOverlayActive,
                     isTraccarRunning = isTraccarRunning,
                     autostartEnabled = autostartEnabled,
+                    locationPermissionGranted = locationPermissionGranted,
                     onRequestOverlayPermission = ::openOverlaySettings,
-                    onOpenLocationPermissionSettings = ::openLocationPermissionSettings,
                     onStartOverlay = ::attachFloatingLyrics,
                     onStopOverlay = ::detachFloatingLyrics,
                     onOpenTraccarConsole = { startActivity(Intent(this, com.wzvideni.traccar.ui.TraccarActivity::class.java)) },
@@ -118,7 +116,8 @@ class MainActivity : ComponentActivity() {
                     onCloseMqttConsole = { showMqttConsole = false },
                     showTaskerInfo = showTaskerInfo,
                     onCloseTaskerInfo = { showTaskerInfo = false },
-                    onAutoGrantPermissions = ::autoGrantRequiredPermissions
+                    onAutoGrantPermissions = ::autoGrantRequiredPermissions,
+                    onOpenLocationPermissionSettings = ::onOpenLocationPermissionSettings
                 )
         }
 
@@ -181,11 +180,11 @@ class MainActivity : ComponentActivity() {
         results += "定位权限:${if (locOk) "已允许" else "失败"}"
 
         // 刷新状态
-        overlayPermissionGranted = android.provider.Settings.canDrawOverlays(this)
-        locationPermissionGranted = androidx.core.content.ContextCompat.checkSelfPermission(
+        overlayPermissionGranted = Settings.canDrawOverlays(this)
+        locationPermissionGranted = ContextCompat.checkSelfPermission(
             this,
-            android.Manifest.permission.ACCESS_FINE_LOCATION
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
 
         Toast.makeText(this, results.joinToString(" · "), Toast.LENGTH_SHORT).show()
     }
@@ -250,14 +249,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun openLocationPermissionSettings() {
+    private fun onOpenLocationPermissionSettings() {
         runCatching {
+            // Try app details first to prompt for permissions
             startActivity(
                 Intent(
                     Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                     Uri.parse("package:$packageName")
                 )
             )
+        }.onFailure {
+            // Fallback to general location settings
+            runCatching { startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }
         }
     }
 }
@@ -266,12 +269,11 @@ class MainActivity : ComponentActivity() {
 private fun MockModeScreen(
     isMockMode: Boolean,
     overlayPermissionGranted: Boolean,
-    locationPermissionGranted: Boolean,
     isOverlayActive: Boolean,
     isTraccarRunning: Boolean,
     autostartEnabled: Boolean,
+    locationPermissionGranted: Boolean,
     onRequestOverlayPermission: () -> Unit,
-    onOpenLocationPermissionSettings: () -> Unit,
     onStartOverlay: () -> Unit,
     onStopOverlay: () -> Unit,
     onOpenTraccarConsole: () -> Unit,
@@ -282,6 +284,7 @@ private fun MockModeScreen(
     showTaskerInfo: Boolean,
     onCloseTaskerInfo: () -> Unit,
     onAutoGrantPermissions: () -> Unit,
+    onOpenLocationPermissionSettings: () -> Unit,
 ) {
     Box(
         modifier = Modifier

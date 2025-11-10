@@ -25,9 +25,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppDefault"
-        tools:targetApi="31"
-        android:usesCleartextTraffic="true"
-        android:networkSecurityConfig="@xml/network_security_config">
+        tools:targetApi="31">
 
         <meta-data
             android:name="xposedsharedprefs"
@@ -84,6 +82,17 @@
             android:name=".autostart.AutoStartSettingsActivity"
             android:exported="false"
             android:screenOrientation="behind" />
+
+        <!-- Hook 端变量镜像接收器：确保模块 App 能接收并更新歌词/元数据/MQTT 当前值 -->
+        <receiver
+            android:name=".broadcast.DebugMirrorReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.wzvideni.pateo.music.internal.LYRICS_INFO" />
+                <action android:name="com.wzvideni.pateo.music.internal.METADATA_CHANGED" />
+                <action android:name="com.wzvideni.pateo.music.internal.MQTT_MESSAGE" />
+            </intent-filter>
+        </receiver>
 
         <!-- Tasker 插件事件配置页面：歌词变化事件 -->
         

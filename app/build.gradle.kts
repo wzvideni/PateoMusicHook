@@ -91,7 +91,6 @@ android {
 }
 
 dependencies {
-    implementation(project(":traccarui"))
     implementation("io.coil-kt.coil3:coil-compose:3.3.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
 
@@ -105,10 +104,13 @@ dependencies {
     // MQTT (Eclipse Paho MQTT v3 client)
     implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
 
+    // Traccar UI (brings in traccarclient via api)
+    implementation(project(":traccarui"))
+
     // Protocol Buffers
     implementation("com.google.protobuf:protobuf-kotlin:4.32.1")
     implementation("androidx.datastore:datastore:1.1.7")
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
 
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.9.3")
@@ -127,9 +129,9 @@ dependencies {
     implementation("androidx.compose.animation:animation-graphics:1.9.3")
 
     // AndroidX
-    implementation("androidx.activity:activity-compose:1.10.1")
-    implementation("androidx.compose.runtime:runtime:1.9.3")
-    implementation("androidx.core:core-ktx:1.17.0")
+    implementation(androidx.activity.activity.compose)
+    implementation(androidx.compose.runtime.runtime)
+    implementation(androidx.core.core.ktx)
     // Preferences
     implementation("androidx.preference:preference-ktx:1.2.1")
 
