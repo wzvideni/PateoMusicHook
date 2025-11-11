@@ -1,6 +1,7 @@
 package com.wzvideni.pateo.music
 
 import android.app.Application
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.highcapable.yukihookapi.hook.log.YLog
@@ -62,8 +63,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // 音乐播放位置
     private val _musicPlayingPosition: MutableStateFlow<Long> = MutableStateFlow(0L)
     val musicPlayingPosition: StateFlow<Long> = _musicPlayingPosition
-    fun setMusicPlayingPosition(value: Long) = _musicPlayingPosition.set(value)
-        .also { }
+    // 为避免切歌瞬间旧曲目的进度上报导致新曲目误判为“最后一句”，在切歌后的短时窗口忽略进度刷新
+    private var lastSongChangeAt: Long = 0L
+    private val progressGateWindowMs: Long = 500
+    fun setMusicPlayingPosition(value: Long) {
+        val now = SystemClock.elapsedRealtime()
+        val withinGate = (now - lastSongChangeAt) < progressGateWindowMs
+        if (withinGate) {
+            // 在切歌门限内强制维持 0，防止残留末行
+            _musicPlayingPosition.value = 0L
+        } else {
+            _musicPlayingPosition.set(value)
+        }
+    }
 
     // 音乐歌词
     private val _musicLyrics: MutableStateFlow<String> = MutableStateFlow("")
@@ -108,7 +120,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun qqMusicSearch(songMid: String?) {
         YLog.debug("qqMusicSearch songMid: $songMid")
         if (songMid != null) {
+            // 切歌时先清空列表并重置索引，避免上一首末尾残留两行
+            lastSongChangeAt = SystemClock.elapsedRealtime()
+            _musicLyricsList.value = emptyList()
+            _musicLyricsIndex.value = 0
+            _musicPlayingPosition.value = 0L
+            // 加载新歌词列表
             _musicLyricsList.value = qqMusicLyricRequest(songMid)
+        } else {
+            // 无有效歌曲ID时也清空状态
+            _musicLyricsList.value = emptyList()
+            _musicLyricsIndex.value = 0
+            _musicPlayingPosition.value = 0L
         }
     }
 

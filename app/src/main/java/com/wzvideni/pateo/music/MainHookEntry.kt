@@ -18,6 +18,8 @@ import com.wzvideni.pateo.music.expansion.getValueOf
 import com.wzvideni.pateo.music.expansion.toast
 import com.wzvideni.pateo.music.broadcast.BroadcastSender
 import com.wzvideni.pateo.music.overlay.FloatingLyricsOverlay
+import com.wzvideni.pateo.music.startup.LsposedStartupReceiver
+import de.robv.android.xposed.XSharedPreferences
 import kotlinx.coroutines.runBlocking
 
 @InjectYukiHookWithXposed
@@ -27,6 +29,10 @@ class MainHookEntry : IYukiHookXposedInit {
     lateinit var mainViewModel: MainViewModel
     lateinit var mainDataStore: MainDataStore
     lateinit var floatingLyricsHandle: FloatingLyricsOverlay.Handle
+    companion object {
+        private val launchedOnce = java.util.concurrent.atomic.AtomicBoolean(false)
+        private val postLaunchedOnce = java.util.concurrent.atomic.AtomicBoolean(false)
+    }
 
     lateinit var windowManager: WindowManager
 
@@ -38,7 +44,7 @@ class MainHookEntry : IYukiHookXposedInit {
         }
         isDebug = true
         isEnableModuleAppResourcesCache = true
-        isEnableHookSharedPreferences = false
+        isEnableHookSharedPreferences = true
         isEnableDataChannel = true
     }
 
@@ -83,6 +89,56 @@ class MainHookEntry : IYukiHookXposedInit {
                         initialPosition = initialPosition
                     )
                     addFloatingComposeView(this)
+
+                    // 简单方式：当 Hook 侧加载到目标音乐 App，按用户设置决定是否打开模块界面（一次性）
+                    runCatching {
+                        val prefs = XSharedPreferences("com.wzvideni.pateo.music", "auto_launch_prefs").apply { reload() }
+                        val allowLaunch = prefs.getBoolean("enabled", false)
+                        if (allowLaunch && launchedOnce.compareAndSet(false, true)) {
+                            val pm = application.packageManager
+                            val launchIntent = pm.getLaunchIntentForPackage("com.wzvideni.pateo.music")
+                            val intent = launchIntent ?: android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
+                                addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+                                // 显式定位到模块的入口 Activity（别名 Home 指向 MainActivity）
+                                setClassName("com.wzvideni.pateo.music", "com.wzvideni.pateo.music.MainActivity")
+                            }
+                            intent.addFlags(
+                                android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                                android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+                            )
+                            application.startActivity(intent)
+                            YLog.debug("Launched module UI from hook side (user-enabled)")
+
+                            // 弹出后一次性延迟执行用户选定的应用
+                            val postEnabled = prefs.getBoolean("post_enabled", false)
+                            val postPkg = prefs.getString("post_package", null)
+                            val postComp = prefs.getString("post_component", null)
+                            if (postEnabled && postLaunchedOnce.compareAndSet(false, true) && !postPkg.isNullOrBlank()) {
+                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                    runCatching {
+                                        val postIntent = pm.getLaunchIntentForPackage(postPkg)
+                                            ?: if (!postComp.isNullOrBlank()) android.content.Intent().setClassName(postPkg, postComp) else null
+                                        if (postIntent != null) {
+                                            postIntent.addFlags(
+                                                android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                                                android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+                                            )
+                                            application.startActivity(postIntent)
+                                            YLog.debug("Post app launched once after UI: pkg=$postPkg comp=$postComp")
+                                        } else {
+                                            YLog.warn("Post app not resolvable: pkg=$postPkg comp=$postComp")
+                                        }
+                                    }.onFailure { e ->
+                                        YLog.error("Failed to launch post app: ${e.message}")
+                                    }
+                                }, 500)
+                            }
+                        } else {
+                            YLog.debug("Auto-launch disabled by user; skip opening UI")
+                        }
+                    }.onFailure {
+                        YLog.warn("Read auto-launch prefs failed: ${it.message}")
+                    }
 
                     // 监听来自模块 App 的模拟悬浮歌词状态广播，用于在 hook 端决定是否发送歌词/元数据广播
                     val receiver = object : BroadcastReceiver() {

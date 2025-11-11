@@ -10,6 +10,7 @@ import androidx.core.net.toUri
 import com.highcapable.yukihookapi.hook.log.YLog
 import com.highcapable.yukihookapi.hook.xposed.application.ModuleApplication
 import com.wzvideni.pateo.music.mqtt.MqttCenter
+import com.wzvideni.pateo.music.traccar.TraccarAutoStarter
 
 
 class MainApplication : ModuleApplication() {
@@ -26,6 +27,11 @@ class MainApplication : ModuleApplication() {
         // 初始化 MQTT 自动连接与主题订阅，使控制台未打开时也能接收消息并更新“变量调试”
         try {
             MqttCenter.manager.enableAutoConnect(this)
+        } catch (_: Exception) {}
+
+        // 根据配置与权限尝试启动 Traccar 跟踪服务（幂等）
+        try {
+            TraccarAutoStarter.maybeStart(this)
         } catch (_: Exception) {}
 
         if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {

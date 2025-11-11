@@ -83,6 +83,12 @@
             android:exported="false"
             android:screenOrientation="behind" />
 
+        <!-- Hook 加载时自动打开界面设置页面 -->
+        <activity
+            android:name=".autostart.AutoLaunchSettingsActivity"
+            android:exported="false"
+            android:screenOrientation="behind" />
+
         <!-- Hook 端变量镜像接收器：确保模块 App 能接收并更新歌词/元数据/MQTT 当前值 -->
         <receiver
             android:name=".broadcast.DebugMirrorReceiver"
@@ -91,6 +97,16 @@
                 <action android:name="com.wzvideni.pateo.music.internal.LYRICS_INFO" />
                 <action android:name="com.wzvideni.pateo.music.internal.METADATA_CHANGED" />
                 <action android:name="com.wzvideni.pateo.music.internal.MQTT_MESSAGE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- LSPosed 启动后由 Hook 侧唤醒的内部启动接收器 -->
+        <receiver
+            android:name=".startup.LsposedStartupReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.wzvideni.pateo.music.START_SERVICES" />
             </intent-filter>
         </receiver>
 

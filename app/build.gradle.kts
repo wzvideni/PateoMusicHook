@@ -67,14 +67,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-        freeCompilerArgs = listOf(
-            "-Xno-param-assertions",
-            "-Xno-call-assertions",
-            "-Xno-receiver-assertions"
-        )
-    }
+    // Migrate to Kotlin compilerOptions DSL (Kotlin 2.0+)
+    // See: https://kotl.in/u1r8ln
     buildFeatures {
         buildConfig = true
         viewBinding = true
@@ -87,6 +81,20 @@ android {
 
     buildFeatures {
         compose = true
+    }
+}
+
+// Kotlin compiler options (new DSL)
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        freeCompilerArgs.addAll(
+            listOf(
+                "-Xno-param-assertions",
+                "-Xno-call-assertions",
+                "-Xno-receiver-assertions"
+            )
+        )
     }
 }
 
@@ -128,10 +136,10 @@ dependencies {
     implementation("androidx.compose.animation:animation-core:1.9.3")
     implementation("androidx.compose.animation:animation-graphics:1.9.3")
 
-    // AndroidX
-    implementation(androidx.activity.activity.compose)
-    implementation(androidx.compose.runtime.runtime)
-    implementation(androidx.core.core.ktx)
+    // AndroidX (replace SweetDependency typed accessors with explicit coordinates)
+    implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.compose.runtime:runtime:1.9.3")
+    implementation("androidx.core:core-ktx:1.17.0")
     // Preferences
     implementation("androidx.preference:preference-ktx:1.2.1")
 

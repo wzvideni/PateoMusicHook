@@ -273,8 +273,9 @@ private fun FloatingLyricsContent(
     val approxLyricLinePx = remember(lyricsSize, otherLyricsSize, density) {
         with(density) { kotlin.math.max(lyricsSize.toPx(), otherLyricsSize.toPx()) * 1.6f }
     }
-    val approxTranslationLinePx = remember(translationSize, otherLyricsSize, density) {
-        with(density) { kotlin.math.max(translationSize.toPx(), otherLyricsSize.toPx()) * 1.6f }
+    // 翻译行高度估算仅基于翻译大小，确保翻译行统一字号
+    val approxTranslationLinePx = remember(translationSize, density) {
+        with(density) { translationSize.toPx() * 1.6f }
     }
     var measuredLyricCurrentPx by remember { mutableStateOf<Float?>(null) }
     var measuredLyricOtherPx by remember { mutableStateOf<Float?>(null) }
@@ -470,10 +471,11 @@ private fun FloatingLyricsContent(
                                     onTextLayout = { measuredTranslationCurrentPx = it.size.height.toFloat() }
                                 )
                             } else {
+                                // 非当前翻译行也统一使用翻译字号，仅颜色/粗细按“其他”样式
                                 Text(
                                     text = translation,
                                     color = otherLyricsColor,
-                                    fontSize = otherLyricsSize,
+                                    fontSize = translationSize,
                                     fontWeight = otherLyricsWeight,
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.fillMaxWidth(),

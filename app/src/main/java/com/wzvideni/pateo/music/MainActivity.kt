@@ -134,8 +134,9 @@ class MainActivity : ComponentActivity() {
         ) == PackageManager.PERMISSION_GRANTED
         isTraccarRunning = PreferenceManager.getDefaultSharedPreferences(this)
             .getBoolean("status", false)
+        // 将状态点用于“Hook加载时自动打开界面”的开关
         autostartEnabled = runCatching {
-            getSharedPreferences("autostart_prefs", MODE_PRIVATE).getBoolean("enabled", false)
+            getSharedPreferences("auto_launch_prefs", MODE_PRIVATE).getBoolean("enabled", false)
         }.getOrElse { false }
         // 默认不自动启动模拟悬浮歌词，保持关闭状态，需手动点击按钮启动
     }
@@ -370,8 +371,8 @@ private fun MockModeScreen(
                                 active = (MqttCenter.manager.connectionState.value == com.wzvideni.pateo.music.mqtt.ConnectionState.CONNECTED)
                             )
                             ButtonWithStatusDot(
-                                text = "开机自启动设置",
-                                onClick = { ctx.startActivity(Intent(ctx, com.wzvideni.pateo.music.autostart.AutoStartSettingsActivity::class.java)) },
+                                text = "自动打开界面设置",
+                                onClick = { ctx.startActivity(Intent(ctx, com.wzvideni.pateo.music.autostart.AutoLaunchSettingsActivity::class.java)) },
                                 active = autostartEnabled
                             )
                         }
