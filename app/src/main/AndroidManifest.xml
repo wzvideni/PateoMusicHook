@@ -64,6 +64,21 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- 将应用声明为主屏幕(Home)候选，便于系统选择为默认桌面应用 -->
+        <activity-alias
+            android:name=".HomeDefault"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:screenOrientation="behind"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- 开机自启动广播接收器 -->
         <receiver
             android:name=".autostart.BootReceiver"
@@ -77,17 +92,40 @@
             </intent-filter>
         </receiver>
 
+        <!-- 唤醒恢复广播接收器：退出空闲或用户解锁时触发一次性桌面自启动任务 -->
+        <receiver
+            android:name=".autostart.WakeResumeReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.os.action.DEVICE_IDLE_MODE_CHANGED" />
+                <action android:name="android.intent.action.USER_PRESENT" />
+            </intent-filter>
+        </receiver>
+
         <!-- 开机自启动设置页面 -->
         <activity
             android:name=".autostart.AutoStartSettingsActivity"
             android:exported="false"
             android:screenOrientation="behind" />
 
-        <!-- Hook 加载时自动打开界面设置页面 -->
+        <!-- 桌面首次启动自启动设置页面 -->
         <activity
-            android:name=".autostart.AutoLaunchSettingsActivity"
+            android:name=".autostart.HomeLaunchSettingsActivity"
             android:exported="false"
             android:screenOrientation="behind" />
+
+        <!-- 无障碍服务设置页面 -->
+        <activity
+            android:name=".accessibility.AccessibilitySettingsActivity"
+            android:exported="true"
+            android:screenOrientation="behind" />
+
+        <!-- 无障碍监控前台服务 -->
+        <service
+            android:name=".accessibility.AccessibilityMonitorService"
+            android:exported="false" />
 
         <!-- Hook 端变量镜像接收器：确保模块 App 能接收并更新歌词/元数据/MQTT 当前值 -->
         <receiver

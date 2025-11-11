@@ -2,9 +2,12 @@ package com.wzvideni.pateo.music
 
 import android.content.Intent
 import android.Manifest
+import android.app.role.RoleManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import android.provider.Settings
+import android.provider.Settings.Secure
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,6 +22,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -64,6 +69,7 @@ class MainActivity : ComponentActivity() {
     private var showMqttConsole by mutableStateOf(false)
     private var showTaskerInfo by mutableStateOf(false)
     private var locationPermissionGranted by mutableStateOf(false)
+    private var accessibilityReady by mutableStateOf(false)
 
     private var windowManager: WindowManager? = null
     private var floatingLyricsHandle: FloatingLyricsOverlay.Handle? = null
@@ -105,6 +111,7 @@ class MainActivity : ComponentActivity() {
                     isOverlayActive = isOverlayActive,
                     isTraccarRunning = isTraccarRunning,
                     autostartEnabled = autostartEnabled,
+                    accessibilityReady = accessibilityReady,
                     locationPermissionGranted = locationPermissionGranted,
                     onRequestOverlayPermission = ::openOverlaySettings,
                     onStartOverlay = ::attachFloatingLyrics,
@@ -134,10 +141,19 @@ class MainActivity : ComponentActivity() {
         ) == PackageManager.PERMISSION_GRANTED
         isTraccarRunning = PreferenceManager.getDefaultSharedPreferences(this)
             .getBoolean("status", false)
-        // 将状态点用于“Hook加载时自动打开界面”的开关
+        // 将状态点用于“桌面首次启动自启动任务”的开关
         autostartEnabled = runCatching {
-            getSharedPreferences("auto_launch_prefs", MODE_PRIVATE).getBoolean("enabled", false)
+            val deviceCtx = createDeviceProtectedStorageContext()
+            val dprefs = deviceCtx.getSharedPreferences("home_launch_prefs", MODE_PRIVATE)
+            val prefs = getSharedPreferences("home_launch_prefs", MODE_PRIVATE)
+            dprefs.getBoolean("enabled", false) || prefs.getBoolean("enabled", false)
         }.getOrElse { false }
+        // 无障碍服务自动检测与开启
+        runCatching { checkAndEnsureLockedAccessibility() }
+        // 启动无障碍持续监控（若启用）
+        runCatching { com.wzvideni.pateo.music.accessibility.AccessibilityMonitorService.startIfEnabled(this) }
+        // 桌面首次启动时，按设置执行自启动任务（一次性）
+        runCatching { maybeRunHomeFirstLaunchTasks() }
         // 默认不自动启动模拟悬浮歌词，保持关闭状态，需手动点击按钮启动
     }
 
@@ -264,6 +280,125 @@ class MainActivity : ComponentActivity() {
             runCatching { startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }
         }
     }
+
+    private fun checkAndEnsureLockedAccessibility() {
+        val prefs = getSharedPreferences("accessibility_prefs", MODE_PRIVATE)
+        // 新版支持多选集合；兼容旧版单项
+        val lockedSet = (prefs.getStringSet("locked_service_ids", emptySet()) ?: emptySet()).toMutableSet()
+        val legacy = prefs.getString("locked_service_id", "") ?: ""
+        if (lockedSet.isEmpty() && legacy.isNotBlank()) {
+            lockedSet.add(legacy)
+        }
+        val autoEnable = prefs.getBoolean("auto_enable", true)
+        if (lockedSet.isEmpty()) {
+            accessibilityReady = false
+            return
+        }
+        val current = Secure.getString(contentResolver, Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
+        val accEnabled = Secure.getInt(contentResolver, Secure.ACCESSIBILITY_ENABLED, 0)
+        val enabledSet = current.split(":").filter { it.isNotBlank() }.map { it.trim() }.toSet()
+        val allEnabled = accEnabled == 1 && lockedSet.all { enabledSet.contains(it) }
+        if (allEnabled) {
+            accessibilityReady = true
+            return
+        }
+        if (!autoEnable) {
+            accessibilityReady = false
+            return
+        }
+        // 尝试通过 root 同时开启所选服务（并保留已启用的其他服务）
+        val union = enabledSet.toMutableSet().apply { addAll(lockedSet) }
+        val newList = union.joinToString(":")
+        val ok1 = runSuCommand("cmd settings put secure enabled_accessibility_services ${newList}") ||
+                runSuCommand("settings put secure enabled_accessibility_services ${newList}")
+        val ok2 = if (accEnabled != 1) {
+            runSuCommand("cmd settings put secure accessibility_enabled 1") || runSuCommand("settings put secure accessibility_enabled 1")
+        } else true
+        val nowCurrent = Secure.getString(contentResolver, Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
+        val nowAccEnabled = Secure.getInt(contentResolver, Secure.ACCESSIBILITY_ENABLED, 0)
+        val nowEnabledSet = nowCurrent.split(":").filter { it.isNotBlank() }.map { it.trim() }.toSet()
+        accessibilityReady = ok1 && ok2 && nowAccEnabled == 1 && lockedSet.all { nowEnabledSet.contains(it) }
+        if (!accessibilityReady) {
+            // 失败时提示用户前往设置
+            Toast.makeText(this, "未能自动开启所有无障碍服务，请在系统设置中手动开启。", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * 桌面首次启动时执行已定义的自启动任务（一次性）。
+     */
+    private fun maybeRunHomeFirstLaunchTasks() {
+        val deviceCtx = createDeviceProtectedStorageContext()
+        val dprefs = deviceCtx.getSharedPreferences("home_launch_prefs", MODE_PRIVATE)
+        val prefs = getSharedPreferences("home_launch_prefs", MODE_PRIVATE)
+
+        val enabled = dprefs.getBoolean("enabled", false) || prefs.getBoolean("enabled", false)
+        val pending = dprefs.getBoolean("first_pending", false) || prefs.getBoolean("first_pending", false)
+        if (!enabled || !pending) return
+
+        val tasksJson = dprefs.getString("tasks_json", null) ?: prefs.getString("tasks_json", null)
+        if (tasksJson.isNullOrBlank()) {
+            dprefs.edit().putBoolean("first_pending", false).apply()
+            prefs.edit().putBoolean("first_pending", false).apply()
+            return
+        }
+
+        val tasks = parseHomeLaunchTasks(tasksJson)
+        if (tasks.isEmpty()) {
+            dprefs.edit().putBoolean("first_pending", false).apply()
+            prefs.edit().putBoolean("first_pending", false).apply()
+            return
+        }
+
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        tasks.forEach { task ->
+            val delay = task.delayMs.coerceAtLeast(0L)
+            handler.postDelayed({
+                runCatching {
+                    val intent = if (!task.component.isNullOrBlank()) {
+                        Intent(Intent.ACTION_MAIN)
+                            .addCategory(Intent.CATEGORY_LAUNCHER)
+                            .setComponent(android.content.ComponentName(task.packageName, task.component!!))
+                    } else {
+                        packageManager.getLaunchIntentForPackage(task.packageName)
+                    } ?: run {
+                        val query = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(task.packageName)
+                        val activities = packageManager.queryIntentActivities(query, 0)
+                        val ri = activities.firstOrNull() ?: return@postDelayed
+                        Intent(Intent.ACTION_MAIN)
+                            .addCategory(Intent.CATEGORY_LAUNCHER)
+                            .setComponent(android.content.ComponentName(ri.activityInfo.packageName, ri.activityInfo.name))
+                    }
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                    startActivity(intent)
+                }
+            }, delay)
+        }
+
+        dprefs.edit().putBoolean("first_pending", false).apply()
+        prefs.edit().putBoolean("first_pending", false).apply()
+    }
+
+    private data class HomeLaunchTask(
+        val packageName: String,
+        val component: String?,
+        val delayMs: Long
+    )
+
+    private fun parseHomeLaunchTasks(json: String): List<HomeLaunchTask> {
+        return runCatching {
+            val arr = org.json.JSONArray(json)
+            val list = mutableListOf<HomeLaunchTask>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                val pkg = obj.optString("pkg").takeIf { it.isNotBlank() } ?: continue
+                val comp = obj.optString("comp").takeIf { it.isNotBlank() }
+                val delay = obj.optLong("delay", 0L)
+                list.add(HomeLaunchTask(pkg, comp, delay))
+            }
+            list
+        }.getOrElse { emptyList() }
+    }
 }
 
 @Composable
@@ -273,6 +408,7 @@ private fun MockModeScreen(
     isOverlayActive: Boolean,
     isTraccarRunning: Boolean,
     autostartEnabled: Boolean,
+    accessibilityReady: Boolean,
     locationPermissionGranted: Boolean,
     onRequestOverlayPermission: () -> Unit,
     onStartOverlay: () -> Unit,
@@ -290,6 +426,8 @@ private fun MockModeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .padding(24.dp)
     ) {
         if (!isMockMode) {
@@ -371,9 +509,38 @@ private fun MockModeScreen(
                                 active = (MqttCenter.manager.connectionState.value == com.wzvideni.pateo.music.mqtt.ConnectionState.CONNECTED)
                             )
                             ButtonWithStatusDot(
-                                text = "自动打开界面设置",
-                                onClick = { ctx.startActivity(Intent(ctx, com.wzvideni.pateo.music.autostart.AutoLaunchSettingsActivity::class.java)) },
+                                text = "桌面自启动设置",
+                                onClick = { ctx.startActivity(Intent(ctx, com.wzvideni.pateo.music.autostart.HomeLaunchSettingsActivity::class.java)) },
                                 active = autostartEnabled
+                            )
+                            ButtonWithStatusDot(
+                                text = "无障碍服务设置",
+                                onClick = { ctx.startActivity(Intent(ctx, com.wzvideni.pateo.music.accessibility.AccessibilitySettingsActivity::class.java)) },
+                                active = accessibilityReady
+                            )
+                            // 默认主屏幕设置入口
+                            val homeHeld = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                ctx.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)
+                            } else false
+                            ButtonWithStatusDot(
+                                text = "设为默认桌面",
+                                onClick = {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                        val rm = ctx.getSystemService(RoleManager::class.java)
+                                        runCatching { ctx.startActivity(rm.createRequestRoleIntent(RoleManager.ROLE_HOME)) }
+                                    } else {
+                                        Toast.makeText(ctx, "系统版本不支持请求默认桌面", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                active = homeHeld
+                            )
+                            ButtonWithStatusDot(
+                                text = "打开默认应用设置",
+                                onClick = {
+                                    runCatching { ctx.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) }
+                                        .onFailure { Toast.makeText(ctx, "无法打开默认应用设置，请在系统设置中手动设置主页应用。", Toast.LENGTH_SHORT).show() }
+                                },
+                                active = homeHeld
                             )
                         }
                     }
