@@ -52,7 +52,6 @@ import android.widget.Toast
 import com.wzvideni.pateo.music.broadcast.BroadcastSender
 import androidx.compose.ui.graphics.Color
 import com.wzvideni.pateo.music.overlay.FloatingLyricsOverlay
-import com.wzvideni.pateo.music.overlay.FloatingPipOverlay
 import com.wzvideni.pateo.music.ui.MqttConsoleWindow
 import com.wzvideni.pateo.music.ui.TaskerInfoWindow
 import com.wzvideni.pateo.music.mqtt.MqttCenter
@@ -68,11 +67,9 @@ class MainActivity : ComponentActivity() {
     private var showTaskerInfo by mutableStateOf(false)
     private var locationPermissionGranted by mutableStateOf(false)
     private var accessibilityReady by mutableStateOf(false)
-    private var isPipOverlayActive by mutableStateOf(false)
 
     private var windowManager: WindowManager? = null
     private var floatingLyricsHandle: FloatingLyricsOverlay.Handle? = null
-    private var pipOverlayHandle: FloatingPipOverlay.Handle? = null
     private var mainViewModel: MainViewModel? = null
     private var mainDataStore: MainDataStore? = null
     private var debugMirrorReceiver: android.content.BroadcastReceiver? = null
@@ -110,7 +107,6 @@ class MainActivity : ComponentActivity() {
                     overlayPermissionGranted = overlayPermissionGranted,
                     isOverlayActive = isOverlayActive,
                     isTraccarRunning = isTraccarRunning,
-                    isPipOverlayActive = isPipOverlayActive,
                     accessibilityReady = accessibilityReady,
                     locationPermissionGranted = locationPermissionGranted,
                     onRequestOverlayPermission = ::openOverlaySettings,
@@ -119,8 +115,6 @@ class MainActivity : ComponentActivity() {
                     onOpenTraccarConsole = { startActivity(Intent(this, com.wzvideni.traccar.ui.TraccarActivity::class.java)) },
                     onOpenMqttConsole = { showMqttConsole = true },
                     onOpenTaskerInfo = { showTaskerInfo = true },
-                    onOpenPipOverlay = ::attachPipOverlay,
-                    onClosePipOverlay = ::detachPipOverlay,
                     showMqttConsole = showMqttConsole,
                     onCloseMqttConsole = { showMqttConsole = false },
                     showTaskerInfo = showTaskerInfo,
@@ -248,48 +242,6 @@ class MainActivity : ComponentActivity() {
         BroadcastSender.sendOverlayStatus(this, false)
     }
 
-    private fun attachPipOverlay() {
-        if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, "请先开启悬浮窗权限", Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (pipOverlayHandle != null) return
-        if (windowManager == null) windowManager = getSystemService(WindowManager::class.java)
-        if (mainViewModel == null) mainViewModel = MainViewModel(application)
-        if (mainDataStore == null) mainDataStore = MainDataStore(this)
-
-        val wm = requireNotNull(windowManager)
-        val vm = requireNotNull(mainViewModel)
-        val ds = requireNotNull(mainDataStore)
-
-        val handle = FloatingPipOverlay.create(
-            context = application,
-            windowManager = wm,
-            mainViewModel = vm,
-            mainDataStore = ds,
-            initialPosition = FloatingPipOverlay.OverlayPosition(80, 80),
-            onRequestClose = { detachPipOverlay() }
-        )
-        pipOverlayHandle = handle
-        try {
-            wm.addView(handle.view, handle.layoutParams)
-            FloatingPipOverlay.updateLifecycleToResumed()
-            isPipOverlayActive = true
-        } catch (e: Throwable) {
-            pipOverlayHandle = null
-            Toast.makeText(this, "创建画中画窗口失败: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun detachPipOverlay() {
-        val wm = windowManager ?: return
-        val handle = pipOverlayHandle ?: return
-        runCatching { wm.removeView(handle.view) }
-        FloatingPipOverlay.updateLifecycleToDestroyed()
-        pipOverlayHandle = null
-        isPipOverlayActive = false
-    }
-
     private fun openOverlaySettings() {
         runCatching {
             startActivity(
@@ -368,7 +320,6 @@ private fun MockModeScreen(
     overlayPermissionGranted: Boolean,
     isOverlayActive: Boolean,
     isTraccarRunning: Boolean,
-    isPipOverlayActive: Boolean,
     accessibilityReady: Boolean,
     locationPermissionGranted: Boolean,
     onRequestOverlayPermission: () -> Unit,
@@ -377,8 +328,6 @@ private fun MockModeScreen(
     onOpenTraccarConsole: () -> Unit,
     onOpenMqttConsole: () -> Unit,
     onOpenTaskerInfo: () -> Unit,
-    onOpenPipOverlay: () -> Unit,
-    onClosePipOverlay: () -> Unit,
     showMqttConsole: Boolean,
     onCloseMqttConsole: () -> Unit,
     showTaskerInfo: Boolean,
@@ -475,11 +424,6 @@ private fun MockModeScreen(
                                 text = "无障碍服务设置",
                                 onClick = { ctx.startActivity(Intent(ctx, com.wzvideni.pateo.music.accessibility.AccessibilitySettingsActivity::class.java)) },
                                 active = accessibilityReady
-                            )
-                            ButtonWithStatusDot(
-                                text = if (!isPipOverlayActive) "创建PiP悬浮窗口(1280×720)" else "关闭PiP悬浮窗口",
-                                onClick = { if (!isPipOverlayActive) onOpenPipOverlay() else onClosePipOverlay() },
-                                active = isPipOverlayActive
                             )
                             // 已移除：默认主屏幕相关入口（设为默认桌面/打开默认应用设置）
                         }
