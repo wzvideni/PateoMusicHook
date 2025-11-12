@@ -2,10 +2,8 @@ package com.wzvideni.pateo.music
 
 import android.content.Intent
 import android.Manifest
-import android.app.role.RoleManager
 import android.net.Uri
 import android.os.Bundle
-import android.os.Build
 import android.provider.Settings
 import android.provider.Settings.Secure
 import android.view.WindowManager
@@ -54,6 +52,7 @@ import android.widget.Toast
 import com.wzvideni.pateo.music.broadcast.BroadcastSender
 import androidx.compose.ui.graphics.Color
 import com.wzvideni.pateo.music.overlay.FloatingLyricsOverlay
+import com.wzvideni.pateo.music.overlay.FloatingPipOverlay
 import com.wzvideni.pateo.music.ui.MqttConsoleWindow
 import com.wzvideni.pateo.music.ui.TaskerInfoWindow
 import com.wzvideni.pateo.music.mqtt.MqttCenter
@@ -65,14 +64,15 @@ class MainActivity : ComponentActivity() {
     private var overlayPermissionGranted by mutableStateOf(false)
     private var isOverlayActive by mutableStateOf(false)
     private var isTraccarRunning by mutableStateOf(false)
-    private var autostartEnabled by mutableStateOf(false)
     private var showMqttConsole by mutableStateOf(false)
     private var showTaskerInfo by mutableStateOf(false)
     private var locationPermissionGranted by mutableStateOf(false)
     private var accessibilityReady by mutableStateOf(false)
+    private var isPipOverlayActive by mutableStateOf(false)
 
     private var windowManager: WindowManager? = null
     private var floatingLyricsHandle: FloatingLyricsOverlay.Handle? = null
+    private var pipOverlayHandle: FloatingPipOverlay.Handle? = null
     private var mainViewModel: MainViewModel? = null
     private var mainDataStore: MainDataStore? = null
     private var debugMirrorReceiver: android.content.BroadcastReceiver? = null
@@ -110,7 +110,7 @@ class MainActivity : ComponentActivity() {
                     overlayPermissionGranted = overlayPermissionGranted,
                     isOverlayActive = isOverlayActive,
                     isTraccarRunning = isTraccarRunning,
-                    autostartEnabled = autostartEnabled,
+                    isPipOverlayActive = isPipOverlayActive,
                     accessibilityReady = accessibilityReady,
                     locationPermissionGranted = locationPermissionGranted,
                     onRequestOverlayPermission = ::openOverlaySettings,
@@ -119,6 +119,8 @@ class MainActivity : ComponentActivity() {
                     onOpenTraccarConsole = { startActivity(Intent(this, com.wzvideni.traccar.ui.TraccarActivity::class.java)) },
                     onOpenMqttConsole = { showMqttConsole = true },
                     onOpenTaskerInfo = { showTaskerInfo = true },
+                    onOpenPipOverlay = ::attachPipOverlay,
+                    onClosePipOverlay = ::detachPipOverlay,
                     showMqttConsole = showMqttConsole,
                     onCloseMqttConsole = { showMqttConsole = false },
                     showTaskerInfo = showTaskerInfo,
@@ -141,19 +143,10 @@ class MainActivity : ComponentActivity() {
         ) == PackageManager.PERMISSION_GRANTED
         isTraccarRunning = PreferenceManager.getDefaultSharedPreferences(this)
             .getBoolean("status", false)
-        // 将状态点用于“桌面首次启动自启动任务”的开关
-        autostartEnabled = runCatching {
-            val deviceCtx = createDeviceProtectedStorageContext()
-            val dprefs = deviceCtx.getSharedPreferences("home_launch_prefs", MODE_PRIVATE)
-            val prefs = getSharedPreferences("home_launch_prefs", MODE_PRIVATE)
-            dprefs.getBoolean("enabled", false) || prefs.getBoolean("enabled", false)
-        }.getOrElse { false }
         // 无障碍服务自动检测与开启
         runCatching { checkAndEnsureLockedAccessibility() }
         // 启动无障碍持续监控（若启用）
         runCatching { com.wzvideni.pateo.music.accessibility.AccessibilityMonitorService.startIfEnabled(this) }
-        // 桌面首次启动时，按设置执行自启动任务（一次性）
-        runCatching { maybeRunHomeFirstLaunchTasks() }
         // 默认不自动启动模拟悬浮歌词，保持关闭状态，需手动点击按钮启动
     }
 
@@ -255,6 +248,48 @@ class MainActivity : ComponentActivity() {
         BroadcastSender.sendOverlayStatus(this, false)
     }
 
+    private fun attachPipOverlay() {
+        if (!Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "请先开启悬浮窗权限", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (pipOverlayHandle != null) return
+        if (windowManager == null) windowManager = getSystemService(WindowManager::class.java)
+        if (mainViewModel == null) mainViewModel = MainViewModel(application)
+        if (mainDataStore == null) mainDataStore = MainDataStore(this)
+
+        val wm = requireNotNull(windowManager)
+        val vm = requireNotNull(mainViewModel)
+        val ds = requireNotNull(mainDataStore)
+
+        val handle = FloatingPipOverlay.create(
+            context = application,
+            windowManager = wm,
+            mainViewModel = vm,
+            mainDataStore = ds,
+            initialPosition = FloatingPipOverlay.OverlayPosition(80, 80),
+            onRequestClose = { detachPipOverlay() }
+        )
+        pipOverlayHandle = handle
+        try {
+            wm.addView(handle.view, handle.layoutParams)
+            FloatingPipOverlay.updateLifecycleToResumed()
+            isPipOverlayActive = true
+        } catch (e: Throwable) {
+            pipOverlayHandle = null
+            Toast.makeText(this, "创建画中画窗口失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun detachPipOverlay() {
+        val wm = windowManager ?: return
+        val handle = pipOverlayHandle ?: return
+        runCatching { wm.removeView(handle.view) }
+        FloatingPipOverlay.updateLifecycleToDestroyed()
+        pipOverlayHandle = null
+        isPipOverlayActive = false
+    }
+
     private fun openOverlaySettings() {
         runCatching {
             startActivity(
@@ -324,81 +359,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * 桌面首次启动时执行已定义的自启动任务（一次性）。
-     */
-    private fun maybeRunHomeFirstLaunchTasks() {
-        val deviceCtx = createDeviceProtectedStorageContext()
-        val dprefs = deviceCtx.getSharedPreferences("home_launch_prefs", MODE_PRIVATE)
-        val prefs = getSharedPreferences("home_launch_prefs", MODE_PRIVATE)
-
-        val enabled = dprefs.getBoolean("enabled", false) || prefs.getBoolean("enabled", false)
-        val pending = dprefs.getBoolean("first_pending", false) || prefs.getBoolean("first_pending", false)
-        if (!enabled || !pending) return
-
-        val tasksJson = dprefs.getString("tasks_json", null) ?: prefs.getString("tasks_json", null)
-        if (tasksJson.isNullOrBlank()) {
-            dprefs.edit().putBoolean("first_pending", false).apply()
-            prefs.edit().putBoolean("first_pending", false).apply()
-            return
-        }
-
-        val tasks = parseHomeLaunchTasks(tasksJson)
-        if (tasks.isEmpty()) {
-            dprefs.edit().putBoolean("first_pending", false).apply()
-            prefs.edit().putBoolean("first_pending", false).apply()
-            return
-        }
-
-        val handler = android.os.Handler(android.os.Looper.getMainLooper())
-        tasks.forEach { task ->
-            val delay = task.delayMs.coerceAtLeast(0L)
-            handler.postDelayed({
-                runCatching {
-                    val intent = if (!task.component.isNullOrBlank()) {
-                        Intent(Intent.ACTION_MAIN)
-                            .addCategory(Intent.CATEGORY_LAUNCHER)
-                            .setComponent(android.content.ComponentName(task.packageName, task.component!!))
-                    } else {
-                        packageManager.getLaunchIntentForPackage(task.packageName)
-                    } ?: run {
-                        val query = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(task.packageName)
-                        val activities = packageManager.queryIntentActivities(query, 0)
-                        val ri = activities.firstOrNull() ?: return@postDelayed
-                        Intent(Intent.ACTION_MAIN)
-                            .addCategory(Intent.CATEGORY_LAUNCHER)
-                            .setComponent(android.content.ComponentName(ri.activityInfo.packageName, ri.activityInfo.name))
-                    }
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-                    startActivity(intent)
-                }
-            }, delay)
-        }
-
-        dprefs.edit().putBoolean("first_pending", false).apply()
-        prefs.edit().putBoolean("first_pending", false).apply()
-    }
-
-    private data class HomeLaunchTask(
-        val packageName: String,
-        val component: String?,
-        val delayMs: Long
-    )
-
-    private fun parseHomeLaunchTasks(json: String): List<HomeLaunchTask> {
-        return runCatching {
-            val arr = org.json.JSONArray(json)
-            val list = mutableListOf<HomeLaunchTask>()
-            for (i in 0 until arr.length()) {
-                val obj = arr.optJSONObject(i) ?: continue
-                val pkg = obj.optString("pkg").takeIf { it.isNotBlank() } ?: continue
-                val comp = obj.optString("comp").takeIf { it.isNotBlank() }
-                val delay = obj.optLong("delay", 0L)
-                list.add(HomeLaunchTask(pkg, comp, delay))
-            }
-            list
-        }.getOrElse { emptyList() }
-    }
+    
 }
 
 @Composable
@@ -407,7 +368,7 @@ private fun MockModeScreen(
     overlayPermissionGranted: Boolean,
     isOverlayActive: Boolean,
     isTraccarRunning: Boolean,
-    autostartEnabled: Boolean,
+    isPipOverlayActive: Boolean,
     accessibilityReady: Boolean,
     locationPermissionGranted: Boolean,
     onRequestOverlayPermission: () -> Unit,
@@ -416,6 +377,8 @@ private fun MockModeScreen(
     onOpenTraccarConsole: () -> Unit,
     onOpenMqttConsole: () -> Unit,
     onOpenTaskerInfo: () -> Unit,
+    onOpenPipOverlay: () -> Unit,
+    onClosePipOverlay: () -> Unit,
     showMqttConsole: Boolean,
     onCloseMqttConsole: () -> Unit,
     showTaskerInfo: Boolean,
@@ -493,7 +456,7 @@ private fun MockModeScreen(
                     GridBlock(
                         modifier = Modifier.width(520.dp).heightIn(min = 320.dp, max = 320.dp),
                         title = "软件工具",
-                        statusActive = isTraccarRunning || autostartEnabled,
+                        statusActive = isTraccarRunning,
                         description = "包含 traccar 跟踪控制台、MQTT 接收控制台与开机自启动设置",
                     ) {
                         val ctx = LocalContext.current
@@ -509,39 +472,16 @@ private fun MockModeScreen(
                                 active = (MqttCenter.manager.connectionState.value == com.wzvideni.pateo.music.mqtt.ConnectionState.CONNECTED)
                             )
                             ButtonWithStatusDot(
-                                text = "桌面自启动设置",
-                                onClick = { ctx.startActivity(Intent(ctx, com.wzvideni.pateo.music.autostart.HomeLaunchSettingsActivity::class.java)) },
-                                active = autostartEnabled
-                            )
-                            ButtonWithStatusDot(
                                 text = "无障碍服务设置",
                                 onClick = { ctx.startActivity(Intent(ctx, com.wzvideni.pateo.music.accessibility.AccessibilitySettingsActivity::class.java)) },
                                 active = accessibilityReady
                             )
-                            // 默认主屏幕设置入口
-                            val homeHeld = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                ctx.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)
-                            } else false
                             ButtonWithStatusDot(
-                                text = "设为默认桌面",
-                                onClick = {
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                        val rm = ctx.getSystemService(RoleManager::class.java)
-                                        runCatching { ctx.startActivity(rm.createRequestRoleIntent(RoleManager.ROLE_HOME)) }
-                                    } else {
-                                        Toast.makeText(ctx, "系统版本不支持请求默认桌面", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                active = homeHeld
+                                text = if (!isPipOverlayActive) "创建PiP悬浮窗口(1280×720)" else "关闭PiP悬浮窗口",
+                                onClick = { if (!isPipOverlayActive) onOpenPipOverlay() else onClosePipOverlay() },
+                                active = isPipOverlayActive
                             )
-                            ButtonWithStatusDot(
-                                text = "打开默认应用设置",
-                                onClick = {
-                                    runCatching { ctx.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) }
-                                        .onFailure { Toast.makeText(ctx, "无法打开默认应用设置，请在系统设置中手动设置主页应用。", Toast.LENGTH_SHORT).show() }
-                                },
-                                active = homeHeld
-                            )
+                            // 已移除：默认主屏幕相关入口（设为默认桌面/打开默认应用设置）
                         }
                     }
 

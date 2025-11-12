@@ -247,6 +247,8 @@ private fun FloatingLyricsContent(
     val singerName by mainViewModel.singerName.collectAsStateWithLifecycle()
     val albumName by mainViewModel.albumName.collectAsStateWithLifecycle()
     val albumPic by mainViewModel.albumPic.collectAsStateWithLifecycle()
+    // 用于识别切歌时机（避免滚动动画导致的短暂残留）
+    val songMid by mainViewModel.songMid.collectAsStateWithLifecycle()
 
     // 使用完整列表 + 平滑滚动，让滚动更自然
     val listState = rememberLazyListState()
@@ -281,6 +283,8 @@ private fun FloatingLyricsContent(
     var measuredLyricOtherPx by remember { mutableStateOf<Float?>(null) }
     var measuredTranslationCurrentPx by remember { mutableStateOf<Float?>(null) }
     var measuredTranslationOtherPx by remember { mutableStateOf<Float?>(null) }
+    // 切歌后首次索引变化不做动画，避免旧内容在动画过程中残留
+    var suppressNextIndexAnimation by remember { mutableStateOf(false) }
     val containerHeightDp = remember(
         musicLyricsList,
         musicLyricsIndex,
@@ -349,6 +353,25 @@ private fun FloatingLyricsContent(
         }
     }
 
+    // 监听切歌：立即重置测量值并将列表无动画定位到起始位置，避免残留
+    LaunchedEffect(songMid) {
+        measuredLyricCurrentPx = null
+        measuredLyricOtherPx = null
+        measuredTranslationCurrentPx = null
+        measuredTranslationOtherPx = null
+        suppressNextIndexAnimation = true
+        // 切歌后无动画定位，使用与下方一致的锚定规则（兼容 2/3/5 行展示）
+        val paddedIndex = musicLyricsIndex + centerOffset
+        val isLast = musicLyricsIndex >= musicLyricsList.lastIndex && musicLyricsList.isNotEmpty()
+        val lastStart = (paddedLyricsList.lastIndex - lyricsVisibleLines + 1).coerceAtLeast(0)
+        val targetIndex = when {
+            isLast && lyricsVisibleLines == 2 -> paddedIndex
+            isLast -> (paddedIndex - centerOffset).coerceAtMost(lastStart)
+            else -> (paddedIndex - centerOffset).coerceIn(0, lastStart)
+        }
+        listState.scrollToItem(targetIndex, 0)
+    }
+
     val coroutineScope = rememberCoroutineScope()
     var controlsVisible by remember { mutableStateOf(false) }
 
@@ -410,7 +433,12 @@ private fun FloatingLyricsContent(
                     isLast -> (paddedIndex - centerOffset).coerceAtMost(lastStart)
                     else -> (paddedIndex - centerOffset).coerceIn(0, lastStart)
                 }
-                listState.animateScrollToItem(targetIndex, 0)
+                if (suppressNextIndexAnimation) {
+                    suppressNextIndexAnimation = false
+                    listState.scrollToItem(targetIndex, 0)
+                } else {
+                    listState.animateScrollToItem(targetIndex, 0)
+                }
             }
 
             LazyColumn(
@@ -426,7 +454,8 @@ private fun FloatingLyricsContent(
                         val millisecond = musicLyrics.millisecond
                         val lyrics = musicLyrics.lyricsList.firstOrNull()
                         val translation = musicLyrics.lyricsList.lastOrNull()
-                        "${millisecond}${lyrics}${translation}"
+                        // 将 songMid 纳入 key，切歌时彻底丢弃旧缓存，避免复用导致的残留
+                        "${songMid ?: ""}-${millisecond}-${lyrics}-${translation}"
                     }
                 ) { index, musicLyrics ->
                     val lyrics = musicLyrics.lyricsList.getOrNull(0)

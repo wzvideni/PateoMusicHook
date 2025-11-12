@@ -3,14 +3,12 @@ pluginManagement {
         gradlePluginPortal()
         google()
         mavenCentral()
-        maven(url = "https://maven.pkg.jetbrains.space/public/p/compose/dev")
     }
 }
 dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven(url = "https://maven.pkg.jetbrains.space/public/p/compose/dev")
     }
 }
 plugins {
@@ -24,4 +22,3 @@ rootProject.name = "PateoMusicHook"
 include(":app")
 include(":traccarclient")
 include(":traccarui")
-include(":desktop")

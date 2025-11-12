@@ -64,20 +64,7 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- 将应用声明为主屏幕(Home)候选，便于系统选择为默认桌面应用 -->
-        <activity-alias
-            android:name=".HomeDefault"
-            android:exported="true"
-            android:label="@string/app_name"
-            android:screenOrientation="behind"
-            android:targetActivity=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-
-                <category android:name="android.intent.category.HOME" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity-alias>
+        <!-- 已移除默认主屏幕(Home)候选声明 -->
 
         <!-- 开机自启动广播接收器 -->
         <receiver
@@ -92,17 +79,6 @@
             </intent-filter>
         </receiver>
 
-        <!-- 唤醒恢复广播接收器：退出空闲或用户解锁时触发一次性桌面自启动任务 -->
-        <receiver
-            android:name=".autostart.WakeResumeReceiver"
-            android:enabled="true"
-            android:exported="true"
-            android:directBootAware="true">
-            <intent-filter>
-                <action android:name="android.os.action.DEVICE_IDLE_MODE_CHANGED" />
-                <action android:name="android.intent.action.USER_PRESENT" />
-            </intent-filter>
-        </receiver>
 
         <!-- 开机自启动设置页面 -->
         <activity
@@ -110,11 +86,7 @@
             android:exported="false"
             android:screenOrientation="behind" />
 
-        <!-- 桌面首次启动自启动设置页面 -->
-        <activity
-            android:name=".autostart.HomeLaunchSettingsActivity"
-            android:exported="false"
-            android:screenOrientation="behind" />
+        
 
         <!-- 无障碍服务设置页面 -->
         <activity
