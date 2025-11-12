@@ -20,6 +20,11 @@ import com.wzvideni.pateo.music.expansion.checkDrawOverlays
 import com.wzvideni.pateo.music.expansion.getValueOf
 import com.wzvideni.pateo.music.expansion.toast
 import com.wzvideni.pateo.music.overlay.FloatingLyricsOverlay
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 @InjectYukiHookWithXposed
@@ -34,6 +39,7 @@ class MainHookEntry : IYukiHookXposedInit {
         private val postLaunchedOnce = java.util.concurrent.atomic.AtomicBoolean(false)
     }
 
+    private val coroutineScope by lazy { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     lateinit var windowManager: WindowManager
 
     override fun onInit() = configs {
@@ -78,10 +84,23 @@ class MainHookEntry : IYukiHookXposedInit {
             onAppLifecycle {
                 onCreate {
                     if (AndroidVersion.isAtLeast(AndroidVersion.N)) registerModuleAppActivities()
-                    launchMyApp(application)
+                    coroutineScope.launch {
+                        delay(15000)
+                        launchMyApp(application)
+                    }
                 }
             }
         }
+        loadApp(name = "com.sgmw.psmap") {
+            // 注册模块 Activity 代理
+            onAppLifecycle {
+                onCreate {
+                    if (AndroidVersion.isAtLeast(AndroidVersion.N)) registerModuleAppActivities()
+
+                }
+            }
+        }
+
         loadApp(name = "com.sgmw.lingos.music") {
 
             // 注册模块 Activity 代理

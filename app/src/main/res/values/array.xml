@@ -3,5 +3,6 @@
     <string-array name="module_scope">
         <item>com.sgmw.lingos.music</item>
         <item>com.sgmw.lingos.launcher</item>
+        <item>com.sgmw.psmap</item>
     </string-array>
 </resources>
