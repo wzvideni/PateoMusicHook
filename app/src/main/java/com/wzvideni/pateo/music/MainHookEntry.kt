@@ -2,8 +2,8 @@ package com.wzvideni.pateo.music
 
 import android.app.Application
 import android.content.BroadcastReceiver
-import android.content.IntentFilter
 import android.content.Context.WINDOW_SERVICE
+import android.content.IntentFilter
 import android.view.WindowManager
 import com.highcapable.betterandroid.system.extension.tool.AndroidVersion
 import com.highcapable.kavaref.KavaRef.Companion.resolve
@@ -13,13 +13,11 @@ import com.highcapable.yukihookapi.hook.factory.encase
 import com.highcapable.yukihookapi.hook.factory.registerModuleAppActivities
 import com.highcapable.yukihookapi.hook.log.YLog
 import com.highcapable.yukihookapi.hook.xposed.proxy.IYukiHookXposedInit
+import com.wzvideni.pateo.music.broadcast.BroadcastSender
 import com.wzvideni.pateo.music.expansion.checkDrawOverlays
 import com.wzvideni.pateo.music.expansion.getValueOf
 import com.wzvideni.pateo.music.expansion.toast
-import com.wzvideni.pateo.music.broadcast.BroadcastSender
 import com.wzvideni.pateo.music.overlay.FloatingLyricsOverlay
-import com.wzvideni.pateo.music.startup.LsposedStartupReceiver
-import de.robv.android.xposed.XSharedPreferences
 import kotlinx.coroutines.runBlocking
 
 @InjectYukiHookWithXposed
@@ -64,6 +62,14 @@ class MainHookEntry : IYukiHookXposedInit {
 
     override fun onHook() = encase {
         // 装载需要 Hook 的 APP
+        loadApp(name = "com.sgmw.lingos.launcher") {
+            // 注册模块 Activity 代理
+            onAppLifecycle {
+                onCreate {
+
+                }
+            }
+        }
         loadApp(name = "com.sgmw.lingos.music") {
 
             // 注册模块 Activity 代理
