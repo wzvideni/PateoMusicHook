@@ -2,7 +2,9 @@ package com.wzvideni.pateo.music
 
 import android.app.Application
 import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Context.WINDOW_SERVICE
+import android.content.Intent
 import android.content.IntentFilter
 import android.view.WindowManager
 import com.highcapable.betterandroid.system.extension.tool.AndroidVersion
@@ -59,14 +61,24 @@ class MainHookEntry : IYukiHookXposedInit {
         }
     }
 
-
+    fun launchMyApp(context: Context) {
+        try {
+            val intent = Intent()
+            intent.setClassName("com.wzvideni.pateo.music", "com.wzvideni.pateo.music.MainActivity")
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } catch (e: Throwable) {
+            YLog.debug("启动失败: ${e.message}")
+        }
+    }
     override fun onHook() = encase {
         // 装载需要 Hook 的 APP
         loadApp(name = "com.sgmw.lingos.launcher") {
             // 注册模块 Activity 代理
             onAppLifecycle {
                 onCreate {
-
+                    if (AndroidVersion.isAtLeast(AndroidVersion.N)) registerModuleAppActivities()
+                    launchMyApp(application)
                 }
             }
         }
